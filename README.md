@@ -2,6 +2,8 @@
 
 Juego multijugador online basado en Time's Up, donde cada jugador puede agregar sus propios personajes personalizados.
 
+**Repositorio:** [https://github.com/fran-bello/personajes.git](https://github.com/fran-bello/personajes.git)
+
 ## Características
 
 - ✅ Sistema de autenticación (registro/login)
