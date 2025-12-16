@@ -4,7 +4,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 require('dotenv').config();
 
-const connectDB = require('./config/database');
+const { connectDB } = require('./config/database');
 const authRoutes = require('./routes/auth');
 const characterRoutes = require('./routes/characters');
 const gameRoutes = require('./routes/games');

@@ -21,7 +21,7 @@ Juego multijugador online basado en Time's Up, donde cada jugador puede agregar 
 
 ### Backend
 - Node.js + Express
-- MongoDB (Mongoose)
+- MySQL (Sequelize ORM)
 - Socket.io (WebSockets)
 - JWT (Autenticación)
 - bcryptjs (Encriptación de contraseñas)
@@ -67,7 +67,7 @@ Juego multijugador online basado en Time's Up, donde cada jugador puede agregar 
 
 #### Prerrequisitos
 - Node.js (v16 o superior)
-- MongoDB (en Laragon debería estar corriendo automáticamente)
+- MySQL (en Laragon debería estar corriendo automáticamente)
 - npm
 
 #### Backend
@@ -82,13 +82,33 @@ cd backend
 npm install
 ```
 
-3. Crea un archivo `.env`:
+3. **Crea la base de datos MySQL:**
+   
+   **Opción A - Desde phpMyAdmin (Docker o local):**
+   - Abre phpMyAdmin: `http://localhost:8080` (o tu puerto configurado)
+   - Haz clic en **"Nueva"** o **"New"** en el panel izquierdo
+   - Nombre: `personajes`
+   - Intercalación: `utf8mb4_unicode_ci`
+   - Haz clic en **"Crear"**
+   
+   **Opción B - Desde línea de comandos:**
+   ```sql
+   CREATE DATABASE personajes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   ```
+   
+   **Nota:** Si usas Docker, verifica la configuración de conexión en el archivo `.env` (ver `SETUP_MYSQL_DOCKER.md`)
+
+4. Crea un archivo `.env`:
    - Copia `env.example.txt` a `.env`
    - En Windows: `copy env.example.txt .env`
    - Edita `.env` con estos valores:
 ```env
 PORT=3001
-MONGODB_URI=mongodb://localhost:27017/personajes
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=personajes
+DB_USER=root
+DB_PASSWORD=          # Deja vacío si no tienes contraseña, o pon tu contraseña de Docker
 JWT_SECRET=tu_secreto_super_seguro_aqui
 NODE_ENV=development
 FRONTEND_URL=http://localhost:5173
@@ -234,9 +254,11 @@ Los archivos de producción estarán en `frontend/dist`
 
 ## Notas
 
-- Asegúrate de que MongoDB esté corriendo antes de iniciar el backend
+- Asegúrate de que MySQL esté corriendo antes de iniciar el backend
+- Las tablas se crearán automáticamente la primera vez que inicies el servidor
 - El JWT_SECRET debe ser una cadena segura en producción
 - Configura las variables de entorno apropiadamente para producción
+- Si MySQL tiene contraseña, configúrala en el archivo `.env`
 
 ## Licencia
 

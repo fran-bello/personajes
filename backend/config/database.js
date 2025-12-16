@@ -1,17 +1,38 @@
-const mongoose = require('mongoose');
+const { Sequelize } = require('sequelize');
+
+// Configuración de la base de datos
+const sequelize = new Sequelize(
+  process.env.DB_NAME || 'personajes',
+  process.env.DB_USER || 'root',
+  process.env.DB_PASSWORD || '',
+  {
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 3306,
+    dialect: 'mysql',
+    logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
+  }
+);
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/personajes', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log(`MongoDB conectado: ${conn.connection.host}`);
+    await sequelize.authenticate();
+    console.log('MySQL conectado correctamente.');
+    
+    // Sincronizar modelos (crear tablas si no existen)
+    if (process.env.NODE_ENV !== 'production') {
+      await sequelize.sync({ alter: true });
+      console.log('Modelos sincronizados.');
+    }
   } catch (error) {
-    console.error('Error conectando a MongoDB:', error.message);
+    console.error('Error conectando a MySQL:', error.message);
     process.exit(1);
   }
 };
 
-module.exports = connectDB;
-
+module.exports = { sequelize, connectDB };

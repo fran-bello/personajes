@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { Link } from 'react-router-dom'
 import './Dashboard.css'
 
 function Dashboard() {
@@ -30,9 +31,15 @@ function Dashboard() {
           </div>
 
           <div className="action-card" onClick={() => navigate('/create-game')}>
-            <div className="action-icon">🎮</div>
-            <h3>Crear Partida</h3>
-            <p>Crea una nueva partida y comparte el código con tus amigos</p>
+            <div className="action-icon">🌐</div>
+            <h3>Partida Online</h3>
+            <p>Crea una partida online y comparte el código con tus amigos</p>
+          </div>
+
+          <div className="action-card" onClick={() => navigate('/local-game')}>
+            <div className="action-icon">📱</div>
+            <h3>Juego Local</h3>
+            <p>Juega en un solo dispositivo pasándolo por turnos</p>
           </div>
         </div>
 

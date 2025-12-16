@@ -16,6 +16,8 @@ function GameRoom() {
   const [timeLeft, setTimeLeft] = useState(60)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [playerCharacters, setPlayerCharacters] = useState(['', ''])
+  const [submittingCharacters, setSubmittingCharacters] = useState(false)
   const socketRef = useRef(null)
   const timerIntervalRef = useRef(null)
 
@@ -32,6 +34,16 @@ function GameRoom() {
       }
     }
   }, [roomCode])
+
+  // Inicializar array de personajes cuando se carga el juego
+  useEffect(() => {
+    if (game && game.charactersPerPlayer) {
+      const charsPerPlayer = game.charactersPerPlayer || 2
+      if (playerCharacters.length !== charsPerPlayer) {
+        setPlayerCharacters(Array(charsPerPlayer).fill(''))
+      }
+    }
+  }, [game?.charactersPerPlayer])
 
   useEffect(() => {
     if (game && game.status === 'playing' && !game.timer.isPaused) {
@@ -51,15 +63,61 @@ function GameRoom() {
     })
   }
 
-  const joinGame = async () => {
+  const joinGame = async (characters = null) => {
     try {
-      const response = await axios.post(`${API_URL}/games/join`, { roomCode })
+      const response = await axios.post(`${API_URL}/games/join`, { 
+        roomCode,
+        characters 
+      })
       setGame(response.data.game)
       setTimeLeft(response.data.game.timer?.timeLeft || response.data.game.timePerRound)
       setLoading(false)
+      if (characters) {
+        const charsPerPlayer = response.data.game.charactersPerPlayer || 2
+        setPlayerCharacters(Array(charsPerPlayer).fill(''))
+      }
     } catch (error) {
       setError(error.response?.data?.message || 'Error al unirse a la partida')
       setLoading(false)
+    }
+  }
+
+  const handleCharacterChange = (index, value) => {
+    const newChars = [...playerCharacters]
+    newChars[index] = value
+    setPlayerCharacters(newChars)
+  }
+
+  const handleSubmitCharacters = async (e) => {
+    e.preventDefault()
+    setError('')
+    
+    const charsPerPlayer = game?.charactersPerPlayer || 2
+    const trimmedChars = playerCharacters.map(c => c.trim()).filter(c => c)
+    
+    if (trimmedChars.length !== charsPerPlayer) {
+      setError(`Debes ingresar ${charsPerPlayer} personajes`)
+      return
+    }
+
+    // Verificar que no haya duplicados
+    const uniqueChars = [...new Set(trimmedChars)]
+    if (uniqueChars.length !== trimmedChars.length) {
+      setError('Los personajes deben ser diferentes')
+      return
+    }
+
+    setSubmittingCharacters(true)
+    try {
+      await joinGame(trimmedChars)
+      if (socketRef.current) {
+        socketRef.current.emit('game-update', roomCode)
+      }
+      setPlayerCharacters(Array(charsPerPlayer).fill(''))
+    } catch (error) {
+      setError(error.response?.data?.message || 'Error al agregar personajes')
+    } finally {
+      setSubmittingCharacters(false)
     }
   }
 
@@ -174,6 +232,17 @@ function GameRoom() {
   const team2Players = game.players.filter(p => p.team === 2)
   const team1Score = game.roundScores.round1.team1 + game.roundScores.round2.team1 + game.roundScores.round3.team1
   const team2Score = game.roundScores.round1.team2 + game.roundScores.round2.team2 + game.roundScores.round3.team2
+  
+  // Verificar si el jugador actual ya aportó sus personajes
+  const playerCharactersData = game.playerCharacters || {}
+  const currentPlayerId = currentPlayer?.user._id || currentPlayer?.user
+  const hasSubmittedCharacters = currentPlayer && playerCharactersData[currentPlayerId]?.length > 0
+  const needsToSubmitCharacters = currentPlayer && !hasSubmittedCharacters && game.status === 'waiting'
+  const charsPerPlayer = game.charactersPerPlayer || 2
+  const totalCharactersNeeded = (game.numPlayers || 4) * charsPerPlayer
+  
+  // Mostrar solo los personajes del jugador actual
+  const myCharacters = currentPlayerId ? (playerCharactersData[currentPlayerId] || []) : []
 
   const roundRules = {
     1: 'Puedes decir todas las palabras que quieras, excepto las que aparecen en la tarjeta',
@@ -238,11 +307,70 @@ function GameRoom() {
         {game.status === 'waiting' && (
           <div className="waiting-section">
             <h3>Código de Sala: <span className="room-code">{game.roomCode}</span></h3>
-            <p>Esperando jugadores... ({game.players.length} jugadores)</p>
-            {isHost && (
-              <button className="btn btn-primary btn-large" onClick={handleStart}>
-                Iniciar Partida
-              </button>
+            <div className="game-info">
+              <p>Jugadores: {game.players.length} / {game.numPlayers || 4}</p>
+              <p>Personajes totales: {game.characters?.length || 0} / {totalCharactersNeeded}</p>
+              <p>Modo: {game.gameMode === 'teams' ? 'Equipos' : 'Parejas'}</p>
+              <p>Personajes por jugador: {charsPerPlayer}</p>
+            </div>
+            
+            {/* Formulario para aportar personajes */}
+            {needsToSubmitCharacters && (
+              <div className="characters-form-section">
+                <h4>Ingresa tus {charsPerPlayer} personaje{charsPerPlayer !== 1 ? 's' : ''}</h4>
+                <form onSubmit={handleSubmitCharacters}>
+                  <div className="characters-inputs">
+                    {Array(charsPerPlayer).fill(0).map((_, index) => (
+                      <input
+                        key={index}
+                        type="text"
+                        value={playerCharacters[index] || ''}
+                        onChange={(e) => handleCharacterChange(index, e.target.value)}
+                        placeholder={`Personaje ${index + 1}`}
+                        required
+                        disabled={submittingCharacters}
+                      />
+                    ))}
+                  </div>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary"
+                    disabled={submittingCharacters}
+                  >
+                    {submittingCharacters ? 'Enviando...' : 'Agregar Personajes'}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* Mostrar solo los personajes del jugador actual */}
+            {!needsToSubmitCharacters && myCharacters.length > 0 && (
+              <div className="my-characters-section">
+                <h4>Tus Personajes:</h4>
+                <div className="my-characters-list">
+                  {myCharacters.map((char, i) => (
+                    <span key={i} className="character-tag">{char}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!needsToSubmitCharacters && (
+              <div className="waiting-info">
+                <p>Esperando que todos los jugadores aporten sus personajes...</p>
+                {isHost && game.characters?.length >= totalCharactersNeeded && game.players.length >= game.numPlayers && (
+                  <button className="btn btn-primary btn-large" onClick={handleStart}>
+                    Iniciar Partida
+                  </button>
+                )}
+                {isHost && (game.characters?.length < totalCharactersNeeded || game.players.length < game.numPlayers) && (
+                  <p className="helper-text">
+                    Se necesitan {totalCharactersNeeded} personajes y {game.numPlayers} jugadores para iniciar
+                    <br />
+                    ({game.characters?.length || 0} personajes, {game.players.length} jugadores)
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}

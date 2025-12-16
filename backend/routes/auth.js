@@ -1,5 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const { Op } = require('sequelize');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 const router = express.Router();
@@ -24,7 +25,11 @@ router.post('/register', async (req, res) => {
     }
 
     // Verificar si el usuario existe
-    const userExists = await User.findOne({ $or: [{ email }, { username }] });
+    const userExists = await User.findOne({
+      where: {
+        [Op.or]: [{ email }, { username }]
+      }
+    });
     if (userExists) {
       return res.status(400).json({ message: 'El usuario o email ya existe' });
     }
@@ -37,9 +42,9 @@ router.post('/register', async (req, res) => {
     });
 
     res.status(201).json({
-      token: generateToken(user._id),
+      token: generateToken(user.id),
       user: {
-        id: user._id,
+        id: user.id,
         username: user.username,
         email: user.email,
         characters: user.characters
@@ -60,7 +65,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Buscar usuario
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ where: { email } });
     if (!user) {
       return res.status(401).json({ message: 'Credenciales inválidas' });
     }
@@ -72,9 +77,9 @@ router.post('/login', async (req, res) => {
     }
 
     res.json({
-      token: generateToken(user._id),
+      token: generateToken(user.id),
       user: {
-        id: user._id,
+        id: user.id,
         username: user.username,
         email: user.email,
         characters: user.characters
@@ -89,7 +94,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', auth, async (req, res) => {
   res.json({
     user: {
-      id: req.user._id,
+      id: req.user.id,
       username: req.user.username,
       email: req.user.email,
       characters: req.user.characters,
@@ -100,4 +105,3 @@ router.get('/me', auth, async (req, res) => {
 });
 
 module.exports = router;
-

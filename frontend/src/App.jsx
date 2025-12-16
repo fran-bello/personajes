@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard'
 import Characters from './components/Characters'
 import CreateGame from './components/CreateGame'
 import GameRoom from './components/GameRoom'
+import LocalGame from './components/LocalGame'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import './App.css'
 
@@ -30,6 +31,7 @@ function AppRoutes() {
       <Route path="/characters" element={<ProtectedRoute><Characters /></ProtectedRoute>} />
       <Route path="/create-game" element={<ProtectedRoute><CreateGame /></ProtectedRoute>} />
       <Route path="/game/:roomCode" element={<ProtectedRoute><GameRoom /></ProtectedRoute>} />
+      <Route path="/local-game" element={<LocalGame />} />
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
   )

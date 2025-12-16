@@ -1,89 +1,136 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
+const User = require('./User');
 
-const gameSchema = new mongoose.Schema({
+const Game = sequelize.define('Game', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   roomCode: {
-    type: String,
-    required: true,
+    type: DataTypes.STRING(6),
+    allowNull: false,
     unique: true,
-    uppercase: true
-  },
-  host: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  players: [{
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    team: {
-      type: Number,
-      enum: [1, 2],
-      default: 1
-    },
-    score: {
-      type: Number,
-      default: 0
+    set(value) {
+      this.setDataValue('roomCode', value.toUpperCase());
     }
-  }],
-  characters: [{
-    type: String,
-    required: true
-  }],
+  },
+  hostId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
+  players: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const value = this.getDataValue('players');
+      return value ? JSON.parse(value) : [];
+    },
+    set(value) {
+      this.setDataValue('players', JSON.stringify(value));
+    }
+  },
+  playerCharacters: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const value = this.getDataValue('playerCharacters');
+      return value ? JSON.parse(value) : {};
+    },
+    set(value) {
+      this.setDataValue('playerCharacters', JSON.stringify(value));
+    }
+  },
+  characters: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+    get() {
+      const value = this.getDataValue('characters');
+      return value ? JSON.parse(value) : [];
+    },
+    set(value) {
+      this.setDataValue('characters', JSON.stringify(value));
+    }
+  },
   currentRound: {
-    type: Number,
-    enum: [1, 2, 3],
-    default: 1
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+    validate: {
+      isIn: [[1, 2, 3]]
+    }
   },
   currentTeam: {
-    type: Number,
-    enum: [1, 2],
-    default: 1
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+    validate: {
+      isIn: [[1, 2]]
+    }
   },
   currentCharacterIndex: {
-    type: Number,
-    default: 0
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
   timePerRound: {
-    type: Number,
-    default: 60
+    type: DataTypes.INTEGER,
+    defaultValue: 60
+  },
+  numPlayers: {
+    type: DataTypes.INTEGER,
+    defaultValue: 4
+  },
+  gameMode: {
+    type: DataTypes.ENUM('teams', 'pairs'),
+    defaultValue: 'teams'
+  },
+  charactersPerPlayer: {
+    type: DataTypes.INTEGER,
+    defaultValue: 2
   },
   status: {
-    type: String,
-    enum: ['waiting', 'playing', 'finished'],
-    default: 'waiting'
+    type: DataTypes.ENUM('waiting', 'playing', 'finished'),
+    defaultValue: 'waiting'
   },
   roundScores: {
-    round1: {
-      team1: { type: Number, default: 0 },
-      team2: { type: Number, default: 0 }
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const value = this.getDataValue('roundScores');
+      return value ? JSON.parse(value) : {
+        round1: { team1: 0, team2: 0 },
+        round2: { team1: 0, team2: 0 },
+        round3: { team1: 0, team2: 0 }
+      };
     },
-    round2: {
-      team1: { type: Number, default: 0 },
-      team2: { type: Number, default: 0 }
-    },
-    round3: {
-      team1: { type: Number, default: 0 },
-      team2: { type: Number, default: 0 }
+    set(value) {
+      this.setDataValue('roundScores', JSON.stringify(value));
     }
   },
   timer: {
-    timeLeft: {
-      type: Number,
-      default: 60
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const value = this.getDataValue('timer');
+      return value ? JSON.parse(value) : { timeLeft: 60, isPaused: false };
     },
-    isPaused: {
-      type: Boolean,
-      default: false
+    set(value) {
+      this.setDataValue('timer', JSON.stringify(value));
     }
   }
 }, {
+  tableName: 'games',
   timestamps: true
 });
 
-// Generar código de sala único
-gameSchema.statics.generateRoomCode = function() {
+// Relaciones
+Game.belongsTo(User, { foreignKey: 'hostId', as: 'host' });
+
+// Método estático para generar código de sala
+Game.generateRoomCode = function() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
   for (let i = 0; i < 6; i++) {
@@ -92,5 +139,4 @@ gameSchema.statics.generateRoomCode = function() {
   return code;
 };
 
-module.exports = mongoose.model('Game', gameSchema);
-
+module.exports = Game;
