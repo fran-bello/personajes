@@ -9,11 +9,11 @@ const User = sequelize.define('User', {
     autoIncrement: true
   },
   username: {
-    type: DataTypes.STRING(20),
+    type: DataTypes.STRING(50),
     allowNull: false,
     unique: true,
     validate: {
-      len: [3, 20]
+      len: [2, 50]
     }
   },
   email: {
@@ -26,10 +26,26 @@ const User = sequelize.define('User', {
   },
   password: {
     type: DataTypes.STRING,
-    allowNull: false,
+    allowNull: true, // Opcional para usuarios de Google
     validate: {
       len: [6, 255]
     }
+  },
+  // Google OAuth
+  googleId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true
+  },
+  // Avatar/Profile picture URL
+  avatar: {
+    type: DataTypes.STRING(500),
+    allowNull: true
+  },
+  // Auth provider: 'local' or 'google'
+  authProvider: {
+    type: DataTypes.ENUM('local', 'google'),
+    defaultValue: 'local'
   },
   characters: {
     type: DataTypes.TEXT,
@@ -55,12 +71,12 @@ const User = sequelize.define('User', {
   timestamps: true,
   hooks: {
     beforeCreate: async (user) => {
-      if (user.password) {
+      if (user.password && user.authProvider === 'local') {
         user.password = await bcrypt.hash(user.password, 10);
       }
     },
     beforeUpdate: async (user) => {
-      if (user.changed('password')) {
+      if (user.changed('password') && user.password) {
         user.password = await bcrypt.hash(user.password, 10);
       }
     }

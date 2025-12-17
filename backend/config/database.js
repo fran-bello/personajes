@@ -24,6 +24,9 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log('MySQL conectado correctamente.');
     
+    // Importar modelos para que se registren con Sequelize (incluye relaciones)
+    require('../models/index');
+    
     // Sincronizar modelos (crear tablas si no existen)
     if (process.env.NODE_ENV !== 'production') {
       await sequelize.sync({ alter: true });

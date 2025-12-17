@@ -120,6 +120,66 @@ const Game = sequelize.define('Game', {
     set(value) {
       this.setDataValue('timer', JSON.stringify(value));
     }
+  },
+  // Personajes disponibles en la ronda actual (se remueven al acertar)
+  roundCharacters: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const value = this.getDataValue('roundCharacters');
+      return value ? JSON.parse(value) : [];
+    },
+    set(value) {
+      this.setDataValue('roundCharacters', JSON.stringify(value));
+    }
+  },
+  // Personajes bloqueados en el turno actual (por fallo)
+  blockedCharacters: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const value = this.getDataValue('blockedCharacters');
+      return value ? JSON.parse(value) : [];
+    },
+    set(value) {
+      this.setDataValue('blockedCharacters', JSON.stringify(value));
+    }
+  },
+  // Estadísticas de aciertos y fallos por jugador
+  playerStats: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const value = this.getDataValue('playerStats');
+      return value ? JSON.parse(value) : {};
+    },
+    set(value) {
+      this.setDataValue('playerStats', JSON.stringify(value));
+    }
+  },
+  // Índice del jugador actual dentro de su equipo
+  currentPlayerIndex: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  // Si estamos en pantalla de espera entre turnos
+  waitingForPlayer: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  // Si estamos mostrando intro de ronda
+  showingRoundIntro: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  // ID de categoría si usa personajes predefinidos
+  categoryId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'categories',
+      key: 'id'
+    }
   }
 }, {
   tableName: 'games',

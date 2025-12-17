@@ -8,6 +8,7 @@ const { connectDB } = require('./config/database');
 const authRoutes = require('./routes/auth');
 const characterRoutes = require('./routes/characters');
 const gameRoutes = require('./routes/games');
+const categoryRoutes = require('./routes/categories');
 
 // Conectar a la base de datos
 connectDB();
@@ -29,6 +30,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/characters', characterRoutes);
 app.use('/api/games', gameRoutes);
+app.use('/api/categories', categoryRoutes);
 
 // WebSocket para actualizaciones en tiempo real
 io.on('connection', (socket) => {
