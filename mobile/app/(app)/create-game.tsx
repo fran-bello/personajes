@@ -122,9 +122,11 @@ export default function CreateGameScreen() {
 
       if (useCategory && selectedCategory) {
         gameData.categoryId = selectedCategory.id;
+        gameData.charactersPerPlayer = parseInt(charactersPerPlayer) || 2; // Enviar también para cálculo automático
         if (maxCharacters) {
           gameData.maxCharacters = parseInt(maxCharacters);
         }
+        // Si no se especifica límite manual, el backend calculará automáticamente: numPlayers * charactersPerPlayer
       } else {
         gameData.characters = characters.map(c => c.trim()).filter(c => c);
         gameData.charactersPerPlayer = parseInt(charactersPerPlayer) || 2;
@@ -310,8 +312,8 @@ export default function CreateGameScreen() {
                         />
                         <Text style={styles.maxCharsHelper}>
                           {maxCharacters 
-                            ? `Se usarán ${Math.min(parseInt(maxCharacters) || 0, selectedCategory.characterCount!)} personajes`
-                            : `Se usarán todos los ${selectedCategory.characterCount} personajes`
+                            ? `Se usarán ${Math.min(parseInt(maxCharacters) || 0, selectedCategory.characterCount!)} personajes (límite manual)`
+                            : `Se usarán ${totalCharactersNeeded} personajes (calculado automáticamente: ${numPlayers} jugadores × ${charactersPerPlayer} por jugador)`
                           }
                         </Text>
                       </View>
@@ -353,14 +355,17 @@ export default function CreateGameScreen() {
                 </TouchableOpacity>
               </View>
 
-              {!useCategory && (
-                <Input
-                  label="Personajes por jugador"
-                  value={charactersPerPlayer}
-                  onChangeText={updateCharactersPerPlayer}
-                  keyboardType="numeric"
-                  placeholder="2"
-                />
+              <Input
+                label="Personajes por jugador"
+                value={charactersPerPlayer}
+                onChangeText={useCategory ? setCharactersPerPlayer : updateCharactersPerPlayer}
+                keyboardType="numeric"
+                placeholder="2"
+              />
+              {useCategory && selectedCategory && (
+                <Text style={styles.helperText}>
+                  Total de personajes: {totalCharactersNeeded} ({charactersPerPlayer} por jugador × {numPlayers} jugadores)
+                </Text>
               )}
 
               <Input

@@ -99,8 +99,14 @@ router.post('/create', auth, async (req, res) => {
       // Obtener todos los personajes de la categoría
       let allCharacters = category.characters.map(c => c.name);
       
-      // Si se especifica un límite, validar y aplicar
+      // Calcular cuántos personajes se necesitan
+      const charsPerPlayer = charactersPerPlayer || 2;
+      const calculatedMax = numPlayers * charsPerPlayer; // Cálculo automático: jugadores × personajes por jugador
+      
+      // Determinar el límite a usar
+      let limitToUse;
       if (maxCharacters) {
+        // Si se especifica un límite manual, validar y usar ese
         const maxChars = parseInt(maxCharacters);
         if (isNaN(maxChars) || maxChars < 1) {
           return res.status(400).json({ message: 'El límite de personajes debe ser un número mayor a 0' });
@@ -110,21 +116,25 @@ router.post('/create', auth, async (req, res) => {
             message: `El límite no puede exceder ${allCharacters.length} personajes (total de la categoría)` 
           });
         }
-        // Mezclar y tomar solo el número especificado
-        for (let i = allCharacters.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [allCharacters[i], allCharacters[j]] = [allCharacters[j], allCharacters[i]];
-        }
-        gameCharacters = allCharacters.slice(0, maxChars);
+        limitToUse = maxChars;
       } else {
-        // Usar todos los personajes
-        gameCharacters = allCharacters;
-        // Mezclar aleatoriamente
-        for (let i = gameCharacters.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [gameCharacters[i], gameCharacters[j]] = [gameCharacters[j], gameCharacters[i]];
+        // Si no se especifica límite manual, usar el cálculo automático
+        limitToUse = calculatedMax;
+        
+        // Validar que el cálculo automático no exceda el total disponible
+        if (limitToUse > allCharacters.length) {
+          return res.status(400).json({ 
+            message: `Se necesitan ${limitToUse} personajes (${numPlayers} jugadores × ${charsPerPlayer} por jugador), pero la categoría solo tiene ${allCharacters.length} personajes disponibles` 
+          });
         }
       }
+      
+      // Mezclar aleatoriamente y tomar solo el número necesario
+      for (let i = allCharacters.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allCharacters[i], allCharacters[j]] = [allCharacters[j], allCharacters[i]];
+      }
+      gameCharacters = allCharacters.slice(0, limitToUse);
       
       useCategory = true;
     } else {

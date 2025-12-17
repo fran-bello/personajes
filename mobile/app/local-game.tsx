@@ -17,7 +17,7 @@ import { LocalPlayer, RoundScores, LOCAL_AVATARS } from '../src/types';
 import { colors } from '../src/theme';
 import { OFFLINE_CATEGORIES, getCategoryById, getCategoriesForUI, OfflineCategory } from '../src/data/categories';
 
-type GameState = 'config' | 'setup' | 'playing' | 'waiting' | 'round_intro' | 'round_intro_mid_turn' | 'finished' | 'new_characters';
+type GameState = 'config' | 'setup' | 'playing' | 'waiting' | 'round_intro' | 'round_intro_mid_turn' | 'finished' | 'new_characters' | 'reconfig';
 
 export default function LocalGameScreen() {
   const [gameState, setGameState] = useState<GameState>('config');
@@ -28,6 +28,7 @@ export default function LocalGameScreen() {
   const [category, setCategory] = useState(''); // Categoría opcional de personajes
   const [usePresetCategory, setUsePresetCategory] = useState(false); // Usar categoría predefinida
   const [selectedCategory, setSelectedCategory] = useState<OfflineCategory | null>(null);
+  const [maxCharacters, setMaxCharacters] = useState(''); // Límite de personajes para categoría
   // Categorías offline - no requieren carga desde servidor
   const categories = getCategoriesForUI();
   const [players, setPlayers] = useState<LocalPlayer[]>([]);
@@ -128,6 +129,7 @@ export default function LocalGameScreen() {
     const category = getCategoryById(categoryId);
     if (category) {
       setSelectedCategory(category);
+      setMaxCharacters(''); // Limpiar límite al cambiar categoría
     }
   };
 
@@ -159,7 +161,39 @@ const handleConfigSubmit = () => {
 
     // Si es categoría predefinida, cargar los personajes
     if (usePresetCategory && selectedCategory?.characters) {
-      setCharacters(selectedCategory.characters);
+      let categoryChars = [...selectedCategory.characters];
+      
+      // Calcular límite automático si no se especifica manualmente
+      const charsPerPlayer = parseInt(charactersPerPlayer) || 2;
+      const calculatedMax = numPlayersInt * charsPerPlayer;
+      
+      let limitToUse: number;
+      if (maxCharacters) {
+        // Validar límite manual
+        const maxChars = parseInt(maxCharacters);
+        if (isNaN(maxChars) || maxChars < 1) {
+          Alert.alert('Error', 'El límite de personajes debe ser un número mayor a 0');
+          return;
+        }
+        if (maxChars > categoryChars.length) {
+          Alert.alert('Error', `El límite no puede exceder ${categoryChars.length} personajes (total de la categoría)`);
+          return;
+        }
+        limitToUse = maxChars;
+      } else {
+        // Usar cálculo automático
+        limitToUse = calculatedMax;
+        if (limitToUse > categoryChars.length) {
+          Alert.alert('Error', `Se necesitan ${limitToUse} personajes (${numPlayersInt} jugadores × ${charsPerPlayer} por jugador), pero la categoría solo tiene ${categoryChars.length} personajes disponibles`);
+          return;
+        }
+      }
+      
+      // Mezclar y tomar solo el número necesario
+      categoryChars = shuffleArray(categoryChars);
+      categoryChars = categoryChars.slice(0, limitToUse);
+      
+      setCharacters(categoryChars);
       setCategory(selectedCategory.name);
     }
 
@@ -522,9 +556,85 @@ const handleAddPlayer = () => {
     setBlockedCharacters([]);
     setPlayerStats({});
     setIsCardPressed(false);
-    setCurrentPlayerForChars(0);
-    setNewPlayerCharacters(Array(parseInt(charactersPerPlayer) || 2).fill(''));
-    setGameState('new_characters');
+    // Ir a pantalla de reconfiguración para permitir cambiar categoría y personajes por jugador
+    setGameState('reconfig');
+  };
+
+  // Confirmar reconfiguración y pasar a ingresar nuevos personajes
+  const handleReconfigSubmit = () => {
+    // Usar el número de jugadores actuales (ya están definidos)
+    const numPlayersInt = players.length;
+
+    if (numPlayersInt < 2) {
+      Alert.alert('Error', 'Debe haber al menos 2 jugadores');
+      return;
+    }
+
+    // Validar que el número de jugadores sea par para modo parejas
+    if (gameMode === 'pairs' && numPlayersInt % 2 !== 0) {
+      Alert.alert('Error', 'Para jugar en parejas, el número de jugadores debe ser par');
+      return;
+    }
+    
+    // Actualizar numPlayers para que coincida con los jugadores actuales
+    setNumPlayers(numPlayersInt.toString());
+
+    // Si se usa categoría predefinida, verificar que haya una seleccionada
+    if (usePresetCategory && !selectedCategory) {
+      Alert.alert('Error', 'Selecciona una categoría predefinida');
+      return;
+    }
+
+    // Si es categoría predefinida, cargar los personajes
+    if (usePresetCategory && selectedCategory?.characters) {
+      let categoryChars = [...selectedCategory.characters];
+      
+      // Calcular límite automático si no se especifica manualmente
+      const charsPerPlayer = parseInt(charactersPerPlayer) || 2;
+      const calculatedMax = numPlayersInt * charsPerPlayer;
+      
+      let limitToUse: number;
+      if (maxCharacters) {
+        // Validar límite manual
+        const maxChars = parseInt(maxCharacters);
+        if (isNaN(maxChars) || maxChars < 1) {
+          Alert.alert('Error', 'El límite de personajes debe ser un número mayor a 0');
+          return;
+        }
+        if (maxChars > categoryChars.length) {
+          Alert.alert('Error', `El límite no puede exceder ${categoryChars.length} personajes (total de la categoría)`);
+          return;
+        }
+        limitToUse = maxChars;
+      } else {
+        // Usar cálculo automático
+        limitToUse = calculatedMax;
+        if (limitToUse > categoryChars.length) {
+          Alert.alert('Error', `Se necesitan ${limitToUse} personajes (${numPlayersInt} jugadores × ${charsPerPlayer} por jugador), pero la categoría solo tiene ${categoryChars.length} personajes disponibles`);
+          return;
+        }
+      }
+      
+      // Mezclar y tomar solo el número necesario
+      categoryChars = shuffleArray(categoryChars);
+      categoryChars = categoryChars.slice(0, limitToUse);
+      
+      setCharacters(categoryChars);
+      setCategory(selectedCategory.name);
+      
+      // Si es categoría predefinida, iniciar juego directamente
+      setRoundCharacters(categoryChars);
+      setCurrentCharacter(pickRandomCharacter(categoryChars, []));
+      setIsPaused(true);
+      setTimeLeft(parseInt(timePerRound) || 60);
+      setGameState('round_intro');
+    } else {
+      // Modo manual: limpiar personajes y pedir nuevos personajes a cada jugador
+      setCharacters([]);
+      setCurrentPlayerForChars(0);
+      setNewPlayerCharacters(Array(parseInt(charactersPerPlayer) || 2).fill(''));
+      setGameState('new_characters');
+    }
   };
 
   // Manejar cambio de personaje en la pantalla de nuevos personajes
@@ -536,6 +646,17 @@ const handleAddPlayer = () => {
 
   // Confirmar personajes del jugador actual y pasar al siguiente
   const confirmNewCharacters = () => {
+    // Si se usa categoría predefinida, los personajes ya están cargados, iniciar directamente
+    if (usePresetCategory && characters.length > 0) {
+      setRoundCharacters([...characters]);
+      setCurrentCharacter(pickRandomCharacter(characters, []));
+      setIsPaused(true);
+      setTimeLeft(parseInt(timePerRound) || 60);
+      setGameState('round_intro');
+      return;
+    }
+
+    // Modo manual: validar y recopilar personajes de cada jugador
     const charsPerPlayer = parseInt(charactersPerPlayer) || 2;
     const trimmedChars = newPlayerCharacters.map((c) => c.trim()).filter((c) => c);
     
@@ -751,7 +872,11 @@ const handleAddPlayer = () => {
               <View style={styles.modeContainer}>
                 <TouchableOpacity 
                   style={[styles.modeButton, !usePresetCategory && styles.modeButtonActive]} 
-                  onPress={() => { setUsePresetCategory(false); setSelectedCategory(null); }}
+                  onPress={() => { 
+                    setUsePresetCategory(false); 
+                    setSelectedCategory(null); 
+                    setMaxCharacters('');
+                  }}
                 >
                   <Text style={[styles.modeText, !usePresetCategory && styles.modeTextActive]}>Manual</Text>
                 </TouchableOpacity>
@@ -806,8 +931,26 @@ const handleAddPlayer = () => {
                       </Text>
                       <Text style={styles.selectedCategoryDesc}>{selectedCategory.description}</Text>
                       <Text style={styles.selectedCategoryChars}>
-                        ✅ {selectedCategory.characters.length} personajes listos (offline)
+                        ✅ {selectedCategory.characters.length} personajes disponibles
                       </Text>
+                      
+                      {/* Input para limitar personajes */}
+                      <View style={styles.maxCharsContainer}>
+                        <Input
+                          label="Límite de personajes (opcional)"
+                          value={maxCharacters}
+                          onChangeText={setMaxCharacters}
+                          keyboardType="numeric"
+                          placeholder={`Máximo: ${selectedCategory.characters.length}`}
+                          style={styles.maxCharsInput}
+                        />
+                        <Text style={styles.maxCharsHelper}>
+                          {maxCharacters 
+                            ? `Se usarán ${Math.min(parseInt(maxCharacters) || 0, selectedCategory.characters.length)} personajes (límite manual)`
+                            : `Se usarán ${parseInt(numPlayers) * parseInt(charactersPerPlayer)} personajes (calculado automáticamente: ${numPlayers} jugadores × ${charactersPerPlayer} por jugador)`
+                          }
+                        </Text>
+                      </View>
                     </View>
                   )}
                 </View>
@@ -1360,6 +1503,153 @@ const handleAddPlayer = () => {
     );
   }
 
+  // RECONFIG SCREEN - Reconfigurar categoría y personajes por jugador (jugar otra vez)
+  if (gameState === 'reconfig') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
+          <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
+            <View style={styles.header}>
+              <View style={styles.headerTitle}>
+                <Text style={styles.headerIcon}>🔄</Text>
+                <Text style={styles.title}>Reconfigurar Partida</Text>
+              </View>
+            </View>
+
+            {/* Info de jugadores conservados */}
+            <Card style={styles.playersPreservedCard}>
+              <Text style={styles.playersPreservedTitle}>✅ Jugadores Conservados</Text>
+              <Text style={styles.playersPreservedText}>
+                Se mantendrán los {players.length} jugadores actuales
+              </Text>
+              <View style={styles.playersPreservedList}>
+                {players.map((p) => (
+                  <View key={p.id} style={styles.preservedPlayerItem}>
+                    <Text style={styles.preservedPlayerAvatar}>{p.avatar}</Text>
+                    <Text style={styles.preservedPlayerName}>{capitalize(p.name)}</Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+
+            <Card>
+              <Text style={styles.cardTitle}>Cambiar Configuración</Text>
+              
+              {/* Personajes por jugador */}
+              <Input 
+                label="Personajes por jugador" 
+                value={charactersPerPlayer} 
+                onChangeText={(val) => handleNumericInput(val, setCharactersPerPlayer)} 
+                keyboardType="numeric" 
+                placeholder="2" 
+              />
+              <Text style={styles.helperText}>
+                Total de personajes: {players.length * (parseInt(charactersPerPlayer) || 2)} ({charactersPerPlayer} por jugador × {players.length} jugadores)
+              </Text>
+
+              {/* Selector de tipo de categoría */}
+              <Text style={styles.label}>Categoría de personajes</Text>
+              <View style={styles.modeContainer}>
+                <TouchableOpacity 
+                  style={[styles.modeButton, !usePresetCategory && styles.modeButtonActive]} 
+                  onPress={() => { 
+                    setUsePresetCategory(false); 
+                    setSelectedCategory(null); 
+                    setMaxCharacters('');
+                  }}
+                >
+                  <Text style={[styles.modeText, !usePresetCategory && styles.modeTextActive]}>Manual</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modeButton, usePresetCategory && styles.modeButtonActive]} 
+                  onPress={() => setUsePresetCategory(true)}
+                >
+                  <Text style={[styles.modeText, usePresetCategory && styles.modeTextActive]}>Predefinida</Text>
+                </TouchableOpacity>
+              </View>
+
+              {!usePresetCategory ? (
+                <>
+                  <Input 
+                    label="Categoría (opcional)" 
+                    value={category} 
+                    onChangeText={setCategory} 
+                    placeholder="Ej: Películas, Famosos, Anime..." 
+                  />
+                  {category ? (
+                    <Text style={styles.categoryHint}>
+                      📋 Los jugadores agregarán personajes de: {category}
+                    </Text>
+                  ) : null}
+                </>
+              ) : (
+                <View style={styles.categoriesSection}>
+                  <Text style={styles.categoriesLabel}>Selecciona una categoría:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
+                    {categories.map((cat) => (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[
+                          styles.categoryCard,
+                          selectedCategory?.id === cat.id && styles.categoryCardActive
+                        ]}
+                        onPress={() => selectCategory(cat.id)}
+                      >
+                        <Text style={styles.categoryIcon}>{cat.icon}</Text>
+                        <Text style={[
+                          styles.categoryName,
+                          selectedCategory?.id === cat.id && styles.categoryNameActive
+                        ]}>{cat.name}</Text>
+                        <Text style={styles.categoryCount}>{cat.characterCount} personajes</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  {selectedCategory && (
+                    <View style={styles.selectedCategoryInfo}>
+                      <Text style={styles.selectedCategoryTitle}>
+                        {selectedCategory.icon} {selectedCategory.name}
+                      </Text>
+                      <Text style={styles.selectedCategoryDesc}>{selectedCategory.description}</Text>
+                      <Text style={styles.selectedCategoryChars}>
+                        ✅ {selectedCategory.characters.length} personajes disponibles
+                      </Text>
+                      
+                      {/* Input para limitar personajes */}
+                      <View style={styles.maxCharsContainer}>
+                        <Input
+                          label="Límite de personajes (opcional)"
+                          value={maxCharacters}
+                          onChangeText={setMaxCharacters}
+                          keyboardType="numeric"
+                          placeholder={`Máximo: ${selectedCategory.characters.length}`}
+                          style={styles.maxCharsInput}
+                        />
+                        <Text style={styles.maxCharsHelper}>
+                          {maxCharacters 
+                            ? `Se usarán ${Math.min(parseInt(maxCharacters) || 0, selectedCategory.characters.length)} personajes (límite manual)`
+                            : `Se usarán ${players.length * parseInt(charactersPerPlayer)} personajes (calculado automáticamente: ${players.length} jugadores × ${charactersPerPlayer} por jugador)`
+                          }
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+              
+              <Button 
+                title="Continuar" 
+                onPress={handleReconfigSubmit} 
+                size="large" 
+                style={{ marginTop: 16 }}
+                disabled={usePresetCategory && !selectedCategory}
+              />
+            </Card>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
   // NEW CHARACTERS SCREEN - Pantalla para ingresar nuevos personajes (jugar otra vez)
   if (gameState === 'new_characters') {
     const currentPlayer = players[currentPlayerForChars];
@@ -1815,4 +2105,16 @@ const styles = StyleSheet.create({
   selectedCategoryTitle: { color: colors.text, fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
   selectedCategoryDesc: { color: colors.textSecondary, fontSize: 13, marginBottom: 4 },
   selectedCategoryChars: { color: colors.success, fontSize: 12, fontWeight: '500' },
+  maxCharsContainer: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  maxCharsInput: { marginBottom: 4 },
+  maxCharsHelper: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
+  
+  // Reconfig screen styles
+  playersPreservedCard: { marginBottom: 16, backgroundColor: colors.success + '15', borderWidth: 2, borderColor: colors.success },
+  playersPreservedTitle: { color: colors.success, fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
+  playersPreservedText: { color: colors.text, fontSize: 14, marginBottom: 12 },
+  playersPreservedList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  preservedPlayerItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 6 },
+  preservedPlayerAvatar: { fontSize: 20 },
+  preservedPlayerName: { color: colors.text, fontSize: 13, fontWeight: '500' },
 });
