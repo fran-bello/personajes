@@ -51,7 +51,7 @@ export function Input({
         error={!!error}
         style={styles.input}
         outlineColor={colors.border}
-        activeOutlineColor={colors.primary}
+        activeOutlineColor={colors.primaryLight}
         textColor={colors.text}
         placeholderTextColor={colors.textMuted}
         right={
@@ -86,5 +86,6 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.surface,
+    borderRadius: 16,
   },
 });

@@ -14,7 +14,7 @@ import { ActivityIndicator } from 'react-native-paper';
 import { useAuth } from '../../../src/context/AuthContext';
 import { api } from '../../../src/services/api';
 import { socketService } from '../../../src/services/socket';
-import { Button, Input, Card } from '../../../src/components';
+import { Button, Input, Card, Modal } from '../../../src/components';
 import { Game, PlayerStats } from '../../../src/types';
 import { colors } from '../../../src/theme';
 
@@ -29,6 +29,7 @@ export default function GameRoomScreen() {
   const [submittingCharacters, setSubmittingCharacters] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cardScale = useRef(new Animated.Value(1)).current;
+  const [showExitModal, setShowExitModal] = useState(false);
 
   const roundRules: Record<number, string> = {
     1: 'Puedes decir todas las palabras excepto las del personaje',
@@ -318,6 +319,12 @@ export default function GameRoomScreen() {
     ? availableCharacters[game.currentCharacterIndex % availableCharacters.length]
     : null;
 
+  const handleExit = () => {
+    socketService.leaveGame(roomCode!);
+    socketService.disconnect();
+    router.replace('/(app)/dashboard');
+  };
+
   // ROUND INTRO SCREEN
   if (game.status === 'playing' && game.showingRoundIntro) {
     const roundInfo = roundDetails[game.currentRound];
@@ -360,12 +367,20 @@ export default function GameRoomScreen() {
           )}
         </View>
 
-        <Button 
-          title="¡Continuar!" 
-          onPress={handleRoundIntroSeen} 
-          size="large" 
-          style={{ marginHorizontal: 24, marginBottom: 32 }} 
-        />
+        <View style={{ width: '100%', gap: 8 }}>
+          <Button 
+            title="¡Continuar!" 
+            onPress={handleRoundIntroSeen} 
+            size="large" 
+            style={{ marginHorizontal: 24, marginBottom: 8 }} 
+          />
+          <TouchableOpacity
+            onPress={() => setShowExitModal(true)}
+            style={styles.pauseButton}
+          >
+            <Text style={styles.pauseText}>🚪 Salir del Juego</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -377,6 +392,31 @@ export default function GameRoomScreen() {
 
     return (
       <SafeAreaView style={styles.waitingContainer}>
+        <View style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}>
+          <Button
+            title="Salir"
+            onPress={() => {
+              Alert.alert(
+                'Salir del Juego',
+                '¿Estás seguro de que quieres salir del juego?',
+                [
+                  { text: 'Cancelar', style: 'cancel' },
+                  {
+                    text: 'Salir',
+                    style: 'destructive',
+                    onPress: () => {
+                      socketService.leaveGame(roomCode!);
+                      socketService.disconnect();
+                      router.replace('/(app)/dashboard');
+                    },
+                  },
+                ]
+              );
+            }}
+            variant="secondary"
+            size="small"
+          />
+        </View>
         <Card style={styles.waitingCard}>
           <Text style={styles.waitingRound}>Ronda {game.currentRound}</Text>
           <Text style={styles.waitingRule}>{roundRules[game.currentRound]}</Text>
@@ -412,6 +452,12 @@ export default function GameRoomScreen() {
             size="large" 
             style={{ marginTop: 24, width: '100%' }} 
           />
+          <TouchableOpacity
+            onPress={() => setShowExitModal(true)}
+            style={styles.pauseButton}
+          >
+            <Text style={styles.pauseText}>🚪 Salir del Juego</Text>
+          </TouchableOpacity>
         </Card>
       </SafeAreaView>
     );
@@ -421,6 +467,16 @@ export default function GameRoomScreen() {
   if (game.status === 'playing' && game.waitingForPlayer && !isCurrentTeam) {
     return (
       <SafeAreaView style={styles.waitingContainer}>
+        <Modal
+          isOpen={showExitModal}
+          onClose={() => setShowExitModal(false)}
+          title="Salir del Juego"
+          message="¿Estás seguro de que quieres salir del juego? Se perderá el progreso actual."
+          onConfirm={handleExit}
+          confirmText="Salir"
+          cancelText="Cancelar"
+          variant="danger"
+        />
         <Card style={styles.waitingCard}>
           <Text style={styles.waitingRound}>Ronda {game.currentRound}</Text>
           <Text style={styles.waitingRule}>{roundRules[game.currentRound]}</Text>
@@ -440,6 +496,12 @@ export default function GameRoomScreen() {
               <Text style={styles.waitingScoreValue}>{team2Score}</Text>
             </View>
           </View>
+          <TouchableOpacity
+            onPress={() => setShowExitModal(true)}
+            style={styles.pauseButton}
+          >
+            <Text style={styles.pauseText}>🚪 Salir del Juego</Text>
+          </TouchableOpacity>
         </Card>
       </SafeAreaView>
     );
@@ -522,6 +584,16 @@ export default function GameRoomScreen() {
         {/* Playing */}
         {game.status === 'playing' && !game.waitingForPlayer && !game.showingRoundIntro && (
           <>
+            <Modal
+              isOpen={showExitModal}
+              onClose={() => setShowExitModal(false)}
+              title="Salir del Juego"
+              message="¿Estás seguro de que quieres salir del juego? Se perderá el progreso actual."
+              onConfirm={handleExit}
+              confirmText="Salir"
+              cancelText="Cancelar"
+              variant="danger"
+            />
             {/* Header con info del jugador */}
             <View style={styles.playerInfoBar}>
               <View style={styles.playerInfoText}>
@@ -586,8 +658,18 @@ export default function GameRoomScreen() {
             )}
 
             {isCurrentTeam && (
-              <TouchableOpacity style={styles.pauseButton} onPress={togglePause}>
-                <Text style={styles.pauseText}>{game.timer?.isPaused ? '▶ Reanudar' : '⏸ Pausar'}</Text>
+              <View style={{ gap: 8 }}>
+                <TouchableOpacity style={styles.pauseButton} onPress={togglePause}>
+                  <Text style={styles.pauseText}>{game.timer?.isPaused ? '▶ Reanudar' : '⏸ Pausar'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.pauseButton} onPress={() => setShowExitModal(true)}>
+                  <Text style={styles.pauseText}>🚪 Salir del Juego</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {!isCurrentTeam && (
+              <TouchableOpacity style={styles.pauseButton} onPress={() => setShowExitModal(true)}>
+                <Text style={styles.pauseText}>🚪 Salir del Juego</Text>
               </TouchableOpacity>
             )}
           </>
@@ -646,7 +728,6 @@ export default function GameRoomScreen() {
           </>
         )}
 
-        <Button title="Salir" onPress={() => router.replace('/(app)/dashboard')} variant="secondary" style={styles.exitButton} />
       </ScrollView>
     </SafeAreaView>
   );

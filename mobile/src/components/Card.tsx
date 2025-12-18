@@ -13,7 +13,7 @@ export function Card({ children, style, onPress }: CardProps) {
   if (onPress) {
     return (
       <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-        <Surface style={[styles.card, style]} elevation={2}>
+        <Surface style={[styles.card, style]} elevation={8}>
           {children}
         </Surface>
       </TouchableOpacity>
@@ -21,7 +21,7 @@ export function Card({ children, style, onPress }: CardProps) {
   }
 
   return (
-    <Surface style={[styles.card, style]} elevation={2}>
+    <Surface style={[styles.card, style]} elevation={8}>
       {children}
     </Surface>
   );
@@ -38,7 +38,7 @@ interface ActionCardProps {
 export function ActionCard({ icon, title, description, onPress, badge }: ActionCardProps) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <Surface style={styles.actionCard} elevation={2}>
+      <Surface style={styles.actionCard} elevation={8}>
         <View style={styles.actionCardContent}>
           <Text style={styles.actionIcon}>{icon}</Text>
           <View style={styles.actionTextContainer}>
@@ -59,19 +59,35 @@ export function ActionCard({ icon, title, description, onPress, badge }: ActionC
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    backgroundColor: colors.surfaceDark || 'rgba(30, 37, 74, 0.9)',
+    borderRadius: 20,
     padding: 20,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
   },
   actionCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
+    backgroundColor: colors.surfaceDark || 'rgba(30, 37, 74, 0.9)',
+    borderRadius: 20,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
   },
   actionCardContent: {
     flexDirection: 'row',

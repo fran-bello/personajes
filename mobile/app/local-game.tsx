@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Input, Card } from '../src/components';
+import { Button, Input, Card, Modal } from '../src/components';
 import { LocalPlayer, RoundScores, LOCAL_AVATARS } from '../src/types';
 import { colors } from '../src/theme';
 import { OFFLINE_CATEGORIES, getCategoryById, getCategoriesForUI, OfflineCategory } from '../src/data/categories';
@@ -61,6 +61,7 @@ export default function LocalGameScreen() {
   const [editPlayerName, setEditPlayerName] = useState('');
   const [editPlayerTeam, setEditPlayerTeam] = useState(1);
   const [editPlayerCharacters, setEditPlayerCharacters] = useState<string[]>([]);
+  const [showExitModal, setShowExitModal] = useState(false); // Modal de salida del juego
   const cardScale = useRef(new Animated.Value(1)).current;
 
   const roundRules: Record<number, string> = {
@@ -84,6 +85,11 @@ export default function LocalGameScreen() {
     return text.split(' ').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     ).join(' ');
+  };
+
+  const handleExit = () => {
+    resetGame();
+    router.back();
   };
 
   const roundDetails: Record<number, { icon: string; title: string; description: string; tips: string[] }> = {
@@ -304,6 +310,21 @@ const handleAddPlayer = () => {
     return shuffled;
   };
 
+  const initializeScores = () => {
+    const numTeams = getNumTeams();
+    const initialScores: RoundScores = {
+      round1: {} as any,
+      round2: {} as any,
+      round3: {} as any,
+    };
+    for (let i = 1; i <= numTeams; i++) {
+      initialScores.round1[`team${i}` as keyof typeof initialScores.round1] = 0;
+      initialScores.round2[`team${i}` as keyof typeof initialScores.round2] = 0;
+      initialScores.round3[`team${i}` as keyof typeof initialScores.round3] = 0;
+    }
+    return initialScores;
+  };
+
   const handleStartGame = () => {
     const numPlayersInt = parseInt(numPlayers);
     const charsPerPlayer = parseInt(charactersPerPlayer) || 2;
@@ -328,15 +349,16 @@ const handleAddPlayer = () => {
   };
 
   const getCurrentPlayer = () => {
-    const teamPlayers = currentTeam === 1 ? team1Players : team2Players;
+    const teamPlayers = players.filter(p => p.team === currentTeam);
     if (teamPlayers.length === 0) return null;
     return teamPlayers[roundPlayerIndex % teamPlayers.length];
   };
 
   const getTotalScore = (team: number) => {
-    return scores.round1[`team${team}` as keyof typeof scores.round1] +
-           scores.round2[`team${team}` as keyof typeof scores.round2] +
-           scores.round3[`team${team}` as keyof typeof scores.round3];
+    const round1Score = scores.round1[`team${team}` as keyof typeof scores.round1] || 0;
+    const round2Score = scores.round2[`team${team}` as keyof typeof scores.round2] || 0;
+    const round3Score = scores.round3[`team${team}` as keyof typeof scores.round3] || 0;
+    return round1Score + round2Score + round3Score;
   };
 
   // Obtener el jugador con más aciertos (MVP)
@@ -427,36 +449,36 @@ const handleAddPlayer = () => {
 
   // Cuando se acaba el tiempo, cambia de equipo/jugador pero NO cambia de ronda
   // La ronda solo cambia cuando todos los personajes son adivinados (en advanceAfterHit)
-  // Orden: J1-E1 → J1-E2 → J2-E1 → J2-E2 → J3-E1 → J3-E2 → J1-E1 → J1-E2 → ... (ciclo infinito hasta adivinar todos)
   const handleTimeUp = () => {
     const timePerRoundInt = parseInt(timePerRound) || 60;
     
     // Pausar timer inmediatamente para evitar llamadas duplicadas
     setIsPaused(true);
     
-    const maxPlayersPerTeam = Math.max(team1Players.length, team2Players.length);
+    const currentTeamPlayers = players.filter(p => p.team === currentTeam);
+    const maxPlayersPerTeam = Math.max(...Array.from({ length: getNumTeams() }, (_, i) => {
+      const teamPlayers = players.filter(p => p.team === i + 1);
+      return teamPlayers.length;
+    }));
     
-    if (currentTeam === 2) {
-      // Después del equipo 2, avanzamos al siguiente jugador y volvemos al equipo 1
-      const nextPlayerIndex = (roundPlayerIndex + 1) % maxPlayersPerTeam;
-      
-      setCurrentTeam(1);
-      setRoundPlayerIndex(nextPlayerIndex);
-      setBlockedCharacters([]); // Limpiar bloqueados para el nuevo turno
-      // Seleccionar nuevo personaje aleatorio para el nuevo turno
-      setCurrentCharacter(pickRandomCharacter(roundCharacters, []));
-      setTimeLeft(timePerRoundInt);
-      setGameState('waiting');
+    // Avanzar al siguiente jugador del mismo equipo
+    const nextPlayerIndex = (roundPlayerIndex + 1) % maxPlayersPerTeam;
+    
+    // Si llegamos al final de los jugadores del equipo actual, cambiar al siguiente equipo
+    if (nextPlayerIndex === 0 && roundPlayerIndex === currentTeamPlayers.length - 1) {
+      const numTeams = getNumTeams();
+      const nextTeam = currentTeam >= numTeams ? 1 : currentTeam + 1;
+      setCurrentTeam(nextTeam);
+      setRoundPlayerIndex(0);
     } else {
-      // Después del equipo 1, pasa al equipo 2 con el MISMO índice de jugador
-      setCurrentTeam(2);
-      // NO incrementamos roundPlayerIndex - el mismo índice para el equipo 2
-      setBlockedCharacters([]); // Limpiar bloqueados para el nuevo turno
-      // Seleccionar nuevo personaje aleatorio para el nuevo turno
-      setCurrentCharacter(pickRandomCharacter(roundCharacters, []));
-      setTimeLeft(timePerRoundInt);
-      setGameState('waiting');
+      setRoundPlayerIndex(nextPlayerIndex);
     }
+    
+    setBlockedCharacters([]); // Limpiar bloqueados para el nuevo turno
+    // Seleccionar nuevo personaje aleatorio para el nuevo turno
+    setCurrentCharacter(pickRandomCharacter(roundCharacters, []));
+    setTimeLeft(timePerRoundInt);
+    setGameState('waiting');
   };
 
   const animateCard = () => {
@@ -474,8 +496,14 @@ const handleAddPlayer = () => {
     
     // Actualizar puntuación del equipo
     const roundKey = `round${round}` as keyof RoundScores;
-    const teamKey = `team${currentPlayer.team}` as 'team1' | 'team2';
-    setScores((prev) => ({ ...prev, [roundKey]: { ...prev[roundKey], [teamKey]: prev[roundKey][teamKey] + 1 } }));
+    const teamKey = `team${currentPlayer.team}` as keyof RoundScores[keyof RoundScores];
+    setScores((prev) => ({ 
+      ...prev, 
+      [roundKey]: { 
+        ...prev[roundKey], 
+        [teamKey]: (prev[roundKey][teamKey] || 0) + 1 
+      } 
+    }));
     
     // Actualizar estadísticas del jugador
     setPlayerStats((prev) => ({
@@ -628,6 +656,8 @@ const handleAddPlayer = () => {
       setIsPaused(true);
       setTimeLeft(parseInt(timePerRound) || 60);
       setGameState('round_intro');
+      // Inicializar scores dinámicamente según número de equipos
+      setScores(initializeScores());
     } else {
       // Modo manual: limpiar personajes y pedir nuevos personajes a cada jugador
       setCharacters([]);
@@ -653,6 +683,8 @@ const handleAddPlayer = () => {
       setIsPaused(true);
       setTimeLeft(parseInt(timePerRound) || 60);
       setGameState('round_intro');
+      // Inicializar scores dinámicamente según número de equipos
+      setScores(initializeScores());
       return;
     }
 
@@ -693,6 +725,8 @@ const handleAddPlayer = () => {
       setIsPaused(true);
       setTimeLeft(parseInt(timePerRound) || 60);
       setGameState('round_intro');
+      // Inicializar scores dinámicamente según número de equipos
+      setScores(initializeScores());
     }
   };
 
@@ -746,12 +780,8 @@ const handleAddPlayer = () => {
     });
     setPlayers(updatedPlayers);
 
-    // Actualizar listas de equipos
-    setTeam1Players(updatedPlayers.filter(p => p.team === 1));
-    setTeam2Players(updatedPlayers.filter(p => p.team === 2));
-
     // Actualizar lista de personajes (remover los viejos, agregar los nuevos)
-    const otherPlayersChars = players
+    const otherPlayersChars = updatedPlayers
       .filter(p => p.id !== editingPlayer.id)
       .flatMap(p => p.characters);
     setCharacters([...otherPlayersChars, ...trimmedChars]);
@@ -778,8 +808,6 @@ const handleAddPlayer = () => {
             // Remover jugador
             const updatedPlayers = players.filter(p => p.id !== playerId);
             setPlayers(updatedPlayers);
-            setTeam1Players(updatedPlayers.filter(p => p.team === 1));
-            setTeam2Players(updatedPlayers.filter(p => p.team === 2));
 
             // Remover personajes del jugador
             const newCharacters = characters.filter(c => !playerToDelete.characters.includes(c));
@@ -1148,50 +1176,38 @@ const handleAddPlayer = () => {
 
             {players.length > 0 && (
               <View style={styles.teamsColumn}>
-                <Card style={styles.teamCardFull}>
-                  <Text style={styles.teamTitle}>Equipo 1</Text>
-                  {team1Players.map((p) => (
-                    <View key={p.id} style={styles.playerRowEditable}>
-                      <View style={styles.playerRowLeft}>
-                        <Text style={styles.playerAvatar}>{p.avatar}</Text>
-                        <Text style={styles.playerName}>{capitalize(p.name)}</Text>
-                      </View>
-                      <View style={styles.playerActionsColumn}>
-                        <TouchableOpacity onPress={() => startEditPlayer(p)} style={styles.editBtn}>
-                          <Text style={styles.editBtnText}>✏️</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => deletePlayer(p.id)} style={styles.deleteBtn}>
-                          <Text style={styles.deleteBtnText}>🗑️</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ))}
-                  {team1Players.length === 0 && (
-                    <Text style={styles.emptyTeamText}>Sin jugadores</Text>
-                  )}
-                </Card>
-                <Card style={styles.teamCardFull}>
-                  <Text style={[styles.teamTitle, { color: colors.secondary }]}>Equipo 2</Text>
-                  {team2Players.map((p) => (
-                    <View key={p.id} style={styles.playerRowEditable}>
-                      <View style={styles.playerRowLeft}>
-                        <Text style={styles.playerAvatar}>{p.avatar}</Text>
-                        <Text style={styles.playerName}>{capitalize(p.name)}</Text>
-                      </View>
-                      <View style={styles.playerActionsColumn}>
-                        <TouchableOpacity onPress={() => startEditPlayer(p)} style={styles.editBtn}>
-                          <Text style={styles.editBtnText}>✏️</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => deletePlayer(p.id)} style={styles.deleteBtn}>
-                          <Text style={styles.deleteBtnText}>🗑️</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ))}
-                  {team2Players.length === 0 && (
-                    <Text style={styles.emptyTeamText}>Sin jugadores</Text>
-                  )}
-                </Card>
+                {Array.from({ length: getNumTeams() }, (_, i) => i + 1).map((teamNum) => {
+                  const teamPlayers = players.filter(p => p.team === teamNum);
+                  const teamColors = [colors.primary, colors.secondary, colors.warning, colors.success, colors.danger];
+                  const teamColor = teamColors[(teamNum - 1) % teamColors.length];
+                  
+                  return (
+                    <Card key={teamNum} style={styles.teamCardFull}>
+                      <Text style={[styles.teamTitle, { color: teamColor }]}>
+                        {gameMode === 'pairs' ? `Pareja ${teamNum}` : `Equipo ${teamNum}`}
+                      </Text>
+                      {teamPlayers.map((p) => (
+                        <View key={p.id} style={styles.playerRowEditable}>
+                          <View style={styles.playerRowLeft}>
+                            <Text style={styles.playerAvatar}>{p.avatar}</Text>
+                            <Text style={styles.playerName}>{capitalize(p.name)}</Text>
+                          </View>
+                          <View style={styles.playerActionsColumn}>
+                            <TouchableOpacity onPress={() => startEditPlayer(p)} style={styles.editBtn}>
+                              <Text style={styles.editBtnText}>✏️</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => deletePlayer(p.id)} style={styles.deleteBtn}>
+                              <Text style={styles.deleteBtnText}>🗑️</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                      {teamPlayers.length === 0 && (
+                        <Text style={styles.emptyTeamText}>Sin jugadores</Text>
+                      )}
+                    </Card>
+                  );
+                })}
               </View>
             )}
 
@@ -1228,6 +1244,16 @@ const handleAddPlayer = () => {
 
     return (
       <SafeAreaView style={styles.playingContainer}>
+        <Modal
+          isOpen={showExitModal}
+          onClose={() => setShowExitModal(false)}
+          title="Salir del Juego"
+          message="¿Estás seguro de que quieres salir del juego? Se perderá el progreso actual."
+          onConfirm={handleExit}
+          confirmText="Salir"
+          cancelText="Cancelar"
+          variant="danger"
+        />
         {/* Header: Jugador actual con avatar */}
         <View style={styles.playingHeader}>
           <View style={styles.playerInfoBar}>
@@ -1326,12 +1352,20 @@ const handleAddPlayer = () => {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity 
-            style={styles.pauseButton}
-            onPress={() => setIsPaused(!isPaused)}
-          >
-            <Text style={styles.pauseText}>{isPaused ? '▶ Reanudar' : '⏸ Pausar'}</Text>
-          </TouchableOpacity>
+          <View style={{ gap: 8 }}>
+            <TouchableOpacity 
+              style={styles.pauseButton}
+              onPress={() => setIsPaused(!isPaused)}
+            >
+              <Text style={styles.pauseText}>{isPaused ? '▶ Reanudar' : '⏸ Pausar'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.pauseButton}
+              onPress={() => setShowExitModal(true)}
+            >
+              <Text style={styles.pauseText}>🚪 Salir del Juego</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -1345,6 +1379,16 @@ const handleAddPlayer = () => {
 
     return (
       <SafeAreaView style={styles.roundIntroContainer}>
+        <Modal
+          isOpen={showExitModal}
+          onClose={() => setShowExitModal(false)}
+          title="Salir del Juego"
+          message="¿Estás seguro de que quieres salir del juego? Se perderá el progreso actual."
+          onConfirm={handleExit}
+          confirmText="Salir"
+          cancelText="Cancelar"
+          variant="danger"
+        />
         <View style={styles.roundIntroContent}>
           {/* Número de ronda grande */}
           <View style={styles.roundNumberBadge}>
@@ -1387,12 +1431,20 @@ const handleAddPlayer = () => {
           )}
         </View>
 
-        <Button 
-          title="¡Comenzar Ronda!" 
-          onPress={() => setGameState('waiting')} 
-          size="large" 
-          style={{ marginHorizontal: 24, marginBottom: 32 }} 
-        />
+        <View style={{ width: '100%', gap: 8 }}>
+          <Button 
+            title="¡Comenzar Ronda!" 
+            onPress={() => setGameState('waiting')} 
+            size="large" 
+            style={{ marginHorizontal: 24, marginBottom: 8 }} 
+          />
+          <TouchableOpacity
+            onPress={() => setShowExitModal(true)}
+            style={styles.pauseButton}
+          >
+            <Text style={styles.pauseText}>🚪 Salir del Juego</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -1404,6 +1456,16 @@ const handleAddPlayer = () => {
 
     return (
       <SafeAreaView style={styles.roundIntroContainer}>
+        <Modal
+          isOpen={showExitModal}
+          onClose={() => setShowExitModal(false)}
+          title="Salir del Juego"
+          message="¿Estás seguro de que quieres salir del juego? Se perderá el progreso actual."
+          onConfirm={handleExit}
+          confirmText="Salir"
+          cancelText="Cancelar"
+          variant="danger"
+        />
         <View style={styles.roundIntroContent}>
           {/* Indicador de tiempo restante */}
           <View style={styles.midTurnTimerBadge}>
@@ -1432,16 +1494,24 @@ const handleAddPlayer = () => {
           </View>
         </View>
 
-        <Button 
-          title="¡Continuar!" 
-          onPress={() => {
-            setIsCardPressed(false); // Ocultar personaje al continuar
-            setIsPaused(false); // Reanudar el timer
-            setGameState('playing');
-          }} 
-          size="large" 
-          style={{ marginHorizontal: 24, marginBottom: 32 }} 
-        />
+        <View style={{ width: '100%', gap: 8 }}>
+          <Button 
+            title="¡Continuar!" 
+            onPress={() => {
+              setIsCardPressed(false); // Ocultar personaje al continuar
+              setIsPaused(false); // Reanudar el timer
+              setGameState('playing');
+            }} 
+            size="large" 
+            style={{ marginHorizontal: 24, marginBottom: 8 }} 
+          />
+          <TouchableOpacity
+            onPress={() => setShowExitModal(true)}
+            style={styles.pauseButton}
+          >
+            <Text style={styles.pauseText}>🚪 Salir del Juego</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -1454,6 +1524,16 @@ const handleAddPlayer = () => {
 
     return (
       <SafeAreaView style={styles.waitingContainer}>
+        <Modal
+          isOpen={showExitModal}
+          onClose={() => setShowExitModal(false)}
+          title="Salir del Juego"
+          message="¿Estás seguro de que quieres salir del juego? Se perderá el progreso actual."
+          onConfirm={handleExit}
+          confirmText="Salir"
+          cancelText="Cancelar"
+          variant="danger"
+        />
         <Card style={styles.waitingCard}>
           <Text style={styles.waitingRound}>Ronda {round}</Text>
           <Text style={styles.waitingRule}>{roundRules[round]}</Text>
@@ -1498,6 +1578,12 @@ const handleAddPlayer = () => {
             size="large" 
             style={{ marginTop: 24, width: '100%' }} 
           />
+          <TouchableOpacity
+            onPress={() => setShowExitModal(true)}
+            style={styles.pauseButton}
+          >
+            <Text style={styles.pauseText}>🚪 Salir del Juego</Text>
+          </TouchableOpacity>
         </Card>
       </SafeAreaView>
     );

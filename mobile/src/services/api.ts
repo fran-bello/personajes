@@ -1,8 +1,9 @@
 import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-// Cambiar esto a tu IP local o URL del servidor
-const API_URL = 'http://192.168.100.3:3001/api';
+// Usa variable de entorno o fallback a desarrollo local
+// En producción, configura EXPO_PUBLIC_API_URL en tu .env o en el build
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.100.3:3001/api';
 
 class ApiService {
   private client: AxiosInstance;

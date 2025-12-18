@@ -9,7 +9,7 @@ export default function AppLayout() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: '#1E254A' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );

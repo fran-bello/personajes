@@ -8,7 +8,7 @@ import CreateGame from './components/CreateGame'
 import GameRoom from './components/GameRoom'
 import LocalGame from './components/LocalGame'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import './App.css'
+import { colors } from './theme'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()

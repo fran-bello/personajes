@@ -45,6 +45,12 @@ class SocketService {
     }
   }
 
+  leaveGame(roomCode: string) {
+    if (this.socket) {
+      this.socket.emit('leave-game', roomCode);
+    }
+  }
+
   emitGameUpdate(roomCode: string) {
     if (this.socket) {
       this.socket.emit('game-update', roomCode);

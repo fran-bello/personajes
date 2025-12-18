@@ -10,18 +10,46 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [rememberMe, setRememberMe] = useState(true)
+  const [savedEmail, setSavedEmail] = useState('')
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      fetchUser()
-    } else {
+    checkAuth()
+  }, [])
+
+  const checkAuth = async () => {
+    try {
+      // Cargar preferencias guardadas
+      const savedRememberMe = localStorage.getItem('rememberMe')
+      const savedEmailValue = localStorage.getItem('savedEmail')
+      const token = localStorage.getItem('token')
+
+      // Establecer preferencia de "recuérdame" (default: true)
+      const rememberMeValue = savedRememberMe !== 'false'
+      setRememberMe(rememberMeValue)
+      
+      // Establecer email guardado
+      if (savedEmailValue) {
+        setSavedEmail(savedEmailValue)
+      }
+
+      // Si hay token y "recuérdame" estaba activo, intentar restaurar sesión
+      if (token && rememberMeValue) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+        await fetchUser()
+      } else if (token && !rememberMeValue) {
+        // Si hay token pero "recuérdame" no estaba activo, limpiarlo
+        localStorage.removeItem('token')
+        delete axios.defaults.headers.common['Authorization']
+      }
+    } catch (error) {
+      console.error('Error checking auth:', error)
+    } finally {
       setLoading(false)
     }
-  }, [])
+  }
 
   const fetchUser = async () => {
     try {
@@ -30,16 +58,33 @@ export function AuthProvider({ children }) {
     } catch (error) {
       localStorage.removeItem('token')
       delete axios.defaults.headers.common['Authorization']
+      setUser(null)
     } finally {
       setLoading(false)
     }
   }
 
-  const login = async (email, password) => {
+  const login = async (email, password, shouldRemember = true) => {
     try {
       const response = await axios.post(`${API_URL}/auth/login`, { email, password })
       const { token, user } = response.data
-      localStorage.setItem('token', token)
+      
+      // Guardar preferencia de "recuérdame"
+      setRememberMe(shouldRemember)
+      localStorage.setItem('rememberMe', shouldRemember.toString())
+      
+      if (shouldRemember) {
+        // Guardar token y email para la próxima vez
+        localStorage.setItem('token', token)
+        localStorage.setItem('savedEmail', email)
+        setSavedEmail(email)
+      } else {
+        // No guardar permanentemente, solo mantener en memoria
+        localStorage.setItem('token', token)
+        localStorage.removeItem('savedEmail')
+        setSavedEmail('')
+      }
+      
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
       setUser(user)
       return { success: true }
@@ -79,7 +124,9 @@ export function AuthProvider({ children }) {
     register,
     logout,
     loading,
-    fetchUser
+    fetchUser,
+    rememberMe,
+    savedEmail
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
