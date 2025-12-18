@@ -74,8 +74,8 @@ export const api = {
     return response.data;
   },
 
-  async joinGame(roomCode, characters) {
-    const response = await apiClient.post('/games/join', { roomCode, characters });
+  async joinGame(roomCode, characters, avatar) {
+    const response = await apiClient.post('/games/join', { roomCode, characters, avatar });
     return response.data;
   },
 
@@ -89,8 +89,9 @@ export const api = {
     return response.data;
   },
 
-  async hitCharacter(roomCode) {
-    const response = await apiClient.post(`/games/${roomCode}/hit`);
+  async hitCharacter(roomCode, timeLeft = null) {
+    const body = timeLeft !== null ? { timeLeft } : {};
+    const response = await apiClient.post(`/games/${roomCode}/hit`, body);
     return response.data;
   },
 
@@ -109,8 +110,22 @@ export const api = {
     return response.data;
   },
 
-  async updateTimer(roomCode, isPaused) {
-    const response = await apiClient.post(`/games/${roomCode}/timer`, { isPaused });
+  async updateTimer(roomCode, isPaused, timeLeft = null) {
+    const body = { isPaused };
+    if (timeLeft !== null) {
+      body.timeLeft = timeLeft;
+    }
+    const response = await apiClient.post(`/games/${roomCode}/timer`, body);
+    return response.data;
+  },
+
+  async cancelGame(roomCode) {
+    const response = await apiClient.delete(`/games/${roomCode}`);
+    return response.data;
+  },
+
+  async leaveGame(roomCode) {
+    const response = await apiClient.post(`/games/${roomCode}/leave`);
     return response.data;
   },
 

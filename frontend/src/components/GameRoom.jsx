@@ -3,12 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
 import { useAuth } from '../context/AuthContext';
-import { Button, Input, Card, Modal } from './index';
+import { Button, Input, Card, Modal, LoadingDots, AvatarSelector } from './index';
+import { AVATARS } from './AvatarSelector';
 import { colors } from '../theme';
+import './GameRoom.css';
 
 function GameRoom() {
   const { roomCode } = useParams();
-  const { user } = useAuth();
+  const { user, fetchUser } = useAuth();
   const navigate = useNavigate();
   const [game, setGame] = useState(null);
   const [timeLeft, setTimeLeft] = useState(60);
@@ -19,6 +21,12 @@ function GameRoom() {
   const timerRef = useRef(null);
   const [cardScale, setCardScale] = useState(1);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [isCardPressed, setIsCardPressed] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0]);
+  const [submittingAvatar, setSubmittingAvatar] = useState(false);
+  const timeUpHandledRef = useRef(false);
 
   const roundRules = {
     1: 'Puedes decir todas las palabras excepto las del personaje',
@@ -49,7 +57,8 @@ function GameRoom() {
 
   useEffect(() => {
     if (roomCode) {
-      joinGame();
+      // Primero intentar obtener el juego
+      fetchGame();
       connectSocket();
     }
     return () => {
@@ -67,24 +76,89 @@ function GameRoom() {
     }
   }, [game?.charactersPerPlayer]);
 
-  useEffect(() => {
-    if (game && game.status === 'playing' && !game.timer?.isPaused && !game.waitingForPlayer && !game.showingRoundIntro) {
-      startTimer();
-    } else {
-      stopTimer();
+  // Función helper para obtener el tiempo actual
+  // Cuando el juego está corriendo, usa el timer local (se actualiza cada segundo)
+  // Cuando está pausado o en intro, usa el tiempo del servidor (fuente de verdad)
+  const getCurrentTimeLeft = () => {
+    const isPaused = game?.timer?.isPaused || game?.waitingForPlayer || game?.showingRoundIntro || game?.showingRoundIntroMidTurn;
+    
+    // Si está pausado o en intro, usar el tiempo del servidor (fuente de verdad)
+    if (isPaused && game?.timer && game.timer.timeLeft !== undefined && game.timer.timeLeft !== null) {
+      return game.timer.timeLeft;
     }
-    return () => stopTimer();
-  }, [game?.status, game?.timer?.isPaused, game?.waitingForPlayer, game?.showingRoundIntro]);
+    
+    // Si está corriendo, usar el timer local que se actualiza cada segundo
+    return timeLeft;
+  };
+
+  // Ref para rastrear el estado previo de showingRoundIntroMidTurn
+  const prevShowingRoundIntroMidTurnRef = useRef(false);
+
+  // Efecto principal: Controlar el timer local basado en el estado del juego
+  // Este efecto se ejecuta cuando cambia el estado del juego (playing/paused/intro)
+  useEffect(() => {
+    if (!game) {
+      return;
+    }
+
+    const isPlaying = game.status === 'playing';
+    const isPaused = game.timer?.isPaused || game.waitingForPlayer || game.showingRoundIntro || game.showingRoundIntroMidTurn;
+    const shouldRunTimer = isPlaying && !isPaused;
+    const wasShowingIntroMidTurn = prevShowingRoundIntroMidTurnRef.current;
+    const justExitedIntroMidTurn = wasShowingIntroMidTurn && !game.showingRoundIntroMidTurn;
+
+    // Actualizar el ref con el estado actual
+    prevShowingRoundIntroMidTurnRef.current = game.showingRoundIntroMidTurn || false;
+
+    // Resetear el flag de timeUp cuando cambia el turno o el estado del juego
+    timeUpHandledRef.current = false;
+
+    if (shouldRunTimer) {
+      // El juego está corriendo: inicializar timer local con tiempo del servidor y empezar
+      // IMPORTANTE: Cuando se reanuda después de intro mid-turn, el servidor tiene el tiempo preservado
+      // Necesitamos sincronizar el timer local con ese tiempo preservado
+      if (!timerRef.current || justExitedIntroMidTurn) {
+        // Si acabamos de salir de la intro mid-turn, siempre sincronizar el tiempo preservado
+        // Esto asegura que el tiempo preservado se use correctamente
+        if (game.timer && game.timer.timeLeft !== undefined && game.timer.timeLeft !== null) {
+          setTimeLeft(game.timer.timeLeft);
+        }
+        if (!timerRef.current) {
+          startTimer();
+        }
+      }
+    } else {
+      // El juego está pausado o no está jugando: detener timer y sincronizar con servidor
+      stopTimer();
+      if (isPaused && game.timer && game.timer.timeLeft !== undefined && game.timer.timeLeft !== null) {
+        setTimeLeft(game.timer.timeLeft);
+      }
+    }
+
+    return () => {
+      // Cleanup: solo detener si el efecto se desmonta o cambia el estado
+      if (!shouldRunTimer) {
+        stopTimer();
+      }
+    };
+  }, [game?.status, game?.timer?.isPaused, game?.waitingForPlayer, game?.showingRoundIntro, game?.showingRoundIntroMidTurn, game?.currentTeam, game?.currentPlayerIndex, game?.timer?.timeLeft]);
 
   const connectSocket = () => {
     socketService.connect();
     if (roomCode) socketService.joinGame(roomCode);
     socketService.onGameUpdated(() => fetchGame());
+    // Escuchar evento de cancelación de partida
+    socketService.onGameCancelled((data) => {
+      // Redirigir inmediatamente al dashboard cuando se cancela la partida
+      socketService.leaveGame(roomCode);
+      socketService.disconnect();
+      navigate('/dashboard');
+    });
   };
 
-  const joinGame = async (characters = null) => {
+  const joinGame = async (characters = null, avatar = null) => {
     try {
-      const response = await api.joinGame(roomCode, characters || undefined);
+      const response = await api.joinGame(roomCode, characters || undefined, avatar || undefined);
       setGame(response.game);
       setTimeLeft(response.game.timer?.timeLeft || response.game.timePerRound);
       setLoading(false);
@@ -94,18 +168,195 @@ function GameRoom() {
     }
   };
 
-  const fetchGame = async () => {
+  const handleSubmitAvatar = async () => {
+    if (!selectedAvatar) {
+      setError('Selecciona un avatar');
+      return;
+    }
+    setSubmittingAvatar(true);
+    setError('');
     try {
-      const response = await api.getGame(roomCode);
+      const response = await api.joinGame(roomCode, null, selectedAvatar);
       setGame(response.game);
-      if (response.game.timer) setTimeLeft(response.game.timer.timeLeft);
+      socketService.emitGameUpdate(roomCode);
     } catch (err) {
-      console.error('Error fetching game:', err);
+      setError(err.response?.data?.message || 'Error');
+    } finally {
+      setSubmittingAvatar(false);
     }
   };
 
+  const handleCancelGame = async () => {
+    try {
+      await api.cancelGame(roomCode);
+      socketService.emitGameUpdate(roomCode);
+      socketService.leaveGame(roomCode);
+      socketService.disconnect();
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error al cancelar la partida');
+      setShowCancelModal(false);
+    }
+  };
+
+  const handleLeaveGame = async () => {
+    try {
+      await api.leaveGame(roomCode);
+      socketService.emitGameUpdate(roomCode);
+      socketService.leaveGame(roomCode);
+      socketService.disconnect();
+      navigate('/dashboard');
+    } catch (err) {
+      // Si hay cualquier error (400, 404, etc.), permitir salir de todas formas
+      // Esto evita que el usuario quede atrapado en la pantalla
+      console.warn('Error al salirse de la partida, pero permitiendo salir:', err.response?.data?.message || err.message);
+      socketService.leaveGame(roomCode);
+      socketService.disconnect();
+      navigate('/dashboard');
+    }
+  };
+
+  const handleExit = async () => {
+    try {
+      if (!game) {
+        socketService.leaveGame(roomCode);
+        socketService.disconnect();
+        navigate('/dashboard');
+        return;
+      }
+
+      const gameHostId = typeof game.host === 'object' ? (game.host.id || game.host._id) : game.host;
+      const userIsHost = gameHostId === user?.id;
+
+      // Si es el anfitrión y el juego está en waiting, intentar cancelar
+      if (game.status === 'waiting' && userIsHost) {
+        try {
+          await api.cancelGame(roomCode);
+        } catch (cancelErr) {
+          // Si falla cancelar, intentar salirse de todas formas
+          console.warn('Error al cancelar, intentando salirse:', cancelErr.response?.data?.message);
+          try {
+            await api.leaveGame(roomCode);
+          } catch (leaveErr) {
+            // Si también falla, salir de todas formas
+            console.warn('Error al salirse, pero permitiendo salir:', leaveErr.response?.data?.message);
+          }
+        }
+      } else {
+        // Si no es anfitrión o el juego ya empezó, salirse
+        try {
+          await api.leaveGame(roomCode);
+        } catch (leaveErr) {
+          // Si falla, permitir salir de todas formas
+          console.warn('Error al salirse, pero permitiendo salir:', leaveErr.response?.data?.message);
+        }
+      }
+      socketService.emitGameUpdate(roomCode);
+      socketService.leaveGame(roomCode);
+      socketService.disconnect();
+      navigate('/dashboard');
+    } catch (err) {
+      // Cualquier error: permitir salir de todas formas
+      console.warn('Error al salir del juego, pero permitiendo salir:', err.response?.data?.message || err.message);
+      socketService.leaveGame(roomCode);
+      socketService.disconnect();
+      navigate('/dashboard');
+    }
+  };
+
+  const fetchGame = async () => {
+    try {
+      const response = await api.getGame(roomCode);
+      const previousStatus = game?.status;
+      setGame(response.game);
+      setLoading(false);
+      // Sincronizar tiempo solo cuando está pausado o en intro
+      // Cuando está corriendo, NO tocar el timer local (el efecto principal lo maneja)
+      if (response.game.timer && response.game.timer.timeLeft !== undefined && response.game.timer.timeLeft !== null) {
+        const isPaused = response.game.timer.isPaused || response.game.waitingForPlayer || response.game.showingRoundIntro || response.game.showingRoundIntroMidTurn;
+        if (isPaused) {
+          // Solo sincronizar cuando está pausado para evitar resetear el timer local cuando está corriendo
+          setTimeLeft(response.game.timer.timeLeft);
+        }
+      }
+      
+      // Si el juego terminó y antes no estaba terminado, actualizar estadísticas del usuario
+      if (response.game.status === 'finished' && previousStatus !== 'finished') {
+        // Refrescar datos del usuario para obtener estadísticas actualizadas
+        if (fetchUser) {
+          fetchUser();
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching game:', err);
+      // Si el juego no existe (404), redirigir inmediatamente al dashboard
+      // Esto puede pasar si el anfitrión canceló la partida o si alguien se salió
+      if (err.response?.status === 404) {
+        socketService.leaveGame(roomCode);
+        socketService.disconnect();
+        navigate('/dashboard');
+        return;
+      }
+      setLoading(false);
+    }
+  };
+
+  const handleTimeUp = async () => {
+    // Cuando el tiempo se acaba, terminar el turno automáticamente (equivalente a un fallo)
+    // Solo procesar si el juego está corriendo y es el turno del jugador actual
+    if (!game || game.status !== 'playing' || game.timer?.isPaused || game.waitingForPlayer || game.showingRoundIntro || game.showingRoundIntroMidTurn) {
+      return;
+    }
+
+    // Verificar que es el turno del jugador actual
+    const currentTeamPlayers = game.players?.filter(p => p.team === game.currentTeam) || [];
+    const currentPlayerIndex = game.currentPlayerIndex || 0;
+    const activePlayer = currentTeamPlayers.length > 0 ? currentTeamPlayers[currentPlayerIndex % currentTeamPlayers.length] : null;
+    if (!activePlayer) return;
+
+    const activePlayerId = typeof activePlayer.user === 'object' ? (activePlayer.user.id || activePlayer.user._id) : activePlayer.user;
+    if (activePlayerId !== user?.id) {
+      // No es el turno del usuario actual, no hacer nada
+      return;
+    }
+
+    stopTimer();
+    try {
+      const response = await api.failCharacter(roomCode);
+      setGame(response.game);
+      socketService.emitGameUpdate(roomCode);
+    } catch (err) {
+      console.error('Error al terminar turno por tiempo:', err);
+      setError(err.response?.data?.message || 'Error al terminar turno');
+    }
+  };
+
+  // Efecto para detectar cuando el tiempo llega a 0 y terminar el turno automáticamente
+  useEffect(() => {
+    if (timeLeft === 0 && game && game.status === 'playing' && !game.timer?.isPaused && !game.waitingForPlayer && !game.showingRoundIntro && !game.showingRoundIntroMidTurn && !timeUpHandledRef.current) {
+      // Verificar que es el turno del jugador actual antes de terminar
+      const currentTeamPlayers = game.players?.filter(p => p.team === game.currentTeam) || [];
+      const currentPlayerIndex = game.currentPlayerIndex || 0;
+      const activePlayer = currentTeamPlayers.length > 0 ? currentTeamPlayers[currentPlayerIndex % currentTeamPlayers.length] : null;
+      
+      if (activePlayer) {
+        const activePlayerId = typeof activePlayer.user === 'object' ? (activePlayer.user.id || activePlayer.user._id) : activePlayer.user;
+        if (activePlayerId === user?.id) {
+          // Es el turno del usuario actual, terminar automáticamente
+          timeUpHandledRef.current = true;
+          handleTimeUp();
+        }
+      }
+    } else if (timeLeft > 0) {
+      // Resetear el flag cuando el tiempo no es 0
+      timeUpHandledRef.current = false;
+    }
+  }, [timeLeft, game?.status, game?.timer?.isPaused, game?.waitingForPlayer, game?.showingRoundIntro, game?.showingRoundIntroMidTurn, game?.currentTeam, game?.currentPlayerIndex, user?.id]);
+
   const startTimer = () => {
     stopTimer();
+    // El timer local se inicializa en el useEffect que controla cuando empieza a correr
+    // Aquí solo iniciamos el intervalo que decrementa el tiempo cada segundo
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -160,17 +411,22 @@ function GameRoom() {
   };
 
   const handleHit = async () => {
+    setIsCardPressed(false);
     animateCard();
     try {
-      const response = await api.hitCharacter(roomCode);
+      // Enviar el tiempo actual al backend para que lo preserve correctamente
+      const currentTime = getCurrentTimeLeft();
+      const response = await api.hitCharacter(roomCode, currentTime);
       setGame(response.game);
       socketService.emitGameUpdate(roomCode);
     } catch (err) {
+      console.error('[handleHit] Error:', err);
       setError(err.response?.data?.message || 'Error');
     }
   };
 
   const handleFail = async () => {
+    setIsCardPressed(false);
     animateCard();
     try {
       const response = await api.failCharacter(roomCode);
@@ -185,7 +441,12 @@ function GameRoom() {
     try {
       const response = await api.playerReady(roomCode);
       setGame(response.game);
-      setTimeLeft(response.game.timePerRound);
+      // Usar el tiempo del servidor (puede ser timePerRound o tiempo preservado)
+      if (response.game.timer && response.game.timer.timeLeft !== undefined && response.game.timer.timeLeft !== null) {
+        setTimeLeft(response.game.timer.timeLeft);
+      } else {
+        setTimeLeft(response.game.timePerRound);
+      }
       socketService.emitGameUpdate(roomCode);
     } catch (err) {
       setError(err.response?.data?.message || 'Error');
@@ -196,8 +457,14 @@ function GameRoom() {
     try {
       const response = await api.roundIntroSeen(roomCode);
       setGame(response.game);
+      // Preservar el tiempo del servidor (especialmente importante para intro mid-turn)
+      // El backend preserva el tiempo cuando es intro mid-turn
+      if (response.game.timer && response.game.timer.timeLeft !== undefined && response.game.timer.timeLeft !== null) {
+        setTimeLeft(response.game.timer.timeLeft);
+      }
       socketService.emitGameUpdate(roomCode);
     } catch (err) {
+      console.error('[handleRoundIntroSeen] Error:', err);
       setError(err.response?.data?.message || 'Error');
     }
   };
@@ -206,7 +473,12 @@ function GameRoom() {
     try {
       const response = await api.startGame(roomCode);
       setGame(response.game);
-      setTimeLeft(response.game.timePerRound);
+      // Usar el tiempo del servidor (puede ser timePerRound o tiempo preservado)
+      if (response.game.timer && response.game.timer.timeLeft !== undefined && response.game.timer.timeLeft !== null) {
+        setTimeLeft(response.game.timer.timeLeft);
+      } else {
+        setTimeLeft(response.game.timePerRound);
+      }
       socketService.emitGameUpdate(roomCode);
     } catch (err) {
       setError(err.response?.data?.message || 'Error al iniciar');
@@ -215,7 +487,10 @@ function GameRoom() {
 
   const togglePause = async () => {
     try {
-      await api.updateTimer(roomCode, !game?.timer?.isPaused);
+      // Preservar el tiempo actual al pausar/reanudar usando la función helper
+      const currentTimeLeft = getCurrentTimeLeft();
+      await api.updateTimer(roomCode, !game?.timer?.isPaused, currentTimeLeft);
+      socketService.emitGameUpdate(roomCode);
       fetchGame();
     } catch (err) {
       console.error('Error:', err);
@@ -303,19 +578,29 @@ function GameRoom() {
   if (!game) return null;
 
   const isHost = (typeof game.host === 'object' ? (game.host.id || game.host._id) : game.host) === user?.id;
-  const currentPlayer = game.players.find((p) => (typeof p.user === 'object' ? p.user.id : p.user) === user?.id);
-  const currentPlayerId = typeof currentPlayer?.user === 'object' ? currentPlayer?.user.id : currentPlayer?.user;
+  const currentPlayer = game.players.find((p) => {
+    if (typeof p.user === 'object') {
+      return (p.user.id || p.user._id) === user?.id;
+    }
+    return p.user === user?.id;
+  });
+  const currentPlayerId = currentPlayer ? (typeof currentPlayer.user === 'object' ? (currentPlayer.user.id || currentPlayer.user._id) : currentPlayer.user) : null;
   const isCurrentTeam = currentPlayer && currentPlayer.team === game.currentTeam;
   const team1Score = game.roundScores.round1.team1 + game.roundScores.round2.team1 + game.roundScores.round3.team1;
   const team2Score = game.roundScores.round1.team2 + game.roundScores.round2.team2 + game.roundScores.round3.team2;
   const playerCharactersData = game.playerCharacters || {};
   const usesCategory = game.usesCategory || game.charactersPerPlayer === 0;
-  const hasSubmittedCharacters = usesCategory || (currentPlayer && playerCharactersData[currentPlayerId]?.length > 0);
-  const needsToSubmitCharacters = !usesCategory && currentPlayer && !hasSubmittedCharacters && game.status === 'waiting';
+  // Verificar si el usuario tiene personajes guardados
+  const userCharacters = currentPlayerId ? (playerCharactersData[currentPlayerId] || []) : [];
+  const hasSubmittedCharacters = usesCategory || (currentPlayer && Array.isArray(userCharacters) && userCharacters.length > 0);
+  const needsToSubmitCharacters = !usesCategory && currentPlayer && currentPlayerId && !hasSubmittedCharacters && game.status === 'waiting';
   const charsPerPlayer = game.charactersPerPlayer || 2;
   const totalCharactersNeeded = usesCategory ? 0 : (game.numPlayers || 4) * charsPerPlayer;
   const myCharacters = currentPlayerId ? playerCharactersData[currentPlayerId] || [] : [];
   const categoryInfo = game.category;
+  const playerAvatars = (game && game.playerAvatars) ? game.playerAvatars : {};
+  const myAvatar = currentPlayerId && playerAvatars ? playerAvatars[currentPlayerId] : null;
+  const needsToSelectAvatar = currentPlayer && !myAvatar && game.status === 'waiting';
 
   // Personajes disponibles
   const roundCharacters = game.roundCharacters || [];
@@ -324,6 +609,143 @@ function GameRoom() {
   const currentCharacter = availableCharacters.length > 0
     ? availableCharacters[game.currentCharacterIndex % availableCharacters.length]
     : null;
+
+  // ROUND INTRO MID-TURN SCREEN (cambio de ronda en medio del turno, preserva tiempo)
+  // Mostrar a todos los jugadores, pero solo el jugador del equipo actual puede confirmar
+  if (game.status === 'playing' && game.showingRoundIntroMidTurn) {
+    const roundInfo = roundDetails[game.currentRound];
+    // Usar siempre el tiempo del servidor como fuente de verdad
+    // El backend preserva el tiempo cuando cambia de ronda en medio del turno
+    // Priorizar game.timer.timeLeft, luego timeLeft local, y finalmente 60 como fallback
+    const actualTimeLeft = (game.timer && game.timer.timeLeft !== undefined && game.timer.timeLeft !== null) 
+      ? game.timer.timeLeft 
+      : (timeLeft !== undefined && timeLeft !== null ? timeLeft : 60);
+    
+    const canConfirm = isCurrentTeam && currentPlayer; // Solo el jugador del equipo actual puede confirmar
+    
+    // Encontrar el jugador que está jugando actualmente (del equipo actual)
+    const currentTeamPlayers = game.players.filter(p => p.team === game.currentTeam);
+    const currentPlayerIndex = game.currentPlayerIndex || 0;
+    const activePlayer = currentTeamPlayers.length > 0 ? currentTeamPlayers[currentPlayerIndex % currentTeamPlayers.length] : null;
+
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px' }}>
+        <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 10 }}>
+          <Button
+            title="Salir"
+            onClick={() => {
+              if (isHost) {
+                setShowCancelModal(true);
+              } else {
+                setShowLeaveModal(true);
+              }
+            }}
+            variant="secondary"
+            size="small"
+          />
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ backgroundColor: colors.warning, padding: '10px 20px', borderRadius: '20px', marginBottom: '16px' }}>
+            <div style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold' }}>⏱️ {actualTimeLeft}s restantes</div>
+          </div>
+
+          <div style={{ backgroundColor: colors.warning, padding: '8px 24px', borderRadius: '20px', marginBottom: '24px' }}>
+            <div style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', letterSpacing: '2px' }}>¡NUEVA RONDA!</div>
+          </div>
+
+          <div style={{ fontSize: '80px', marginBottom: '16px' }}>{roundInfo.icon}</div>
+          <h1 style={{ color: colors.text, fontSize: '42px', fontWeight: 'bold', marginBottom: '16px', letterSpacing: '2px', textTransform: 'uppercase' }}>
+            RONDA {game.currentRound}: {roundInfo.title}
+          </h1>
+          <p style={{ color: colors.textSecondary, fontSize: '18px', textAlign: 'center', marginBottom: '32px', lineHeight: '26px', maxWidth: '600px' }}>
+            {roundInfo.description}
+          </p>
+
+          <Card style={{ width: '100%', maxWidth: '600px', marginBottom: '24px' }}>
+            {roundInfo.tips.map((tip, index) => (
+              <div key={index} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px' }}>
+                <span style={{ color: colors.primary, fontSize: '18px', fontWeight: 'bold', marginRight: '12px' }}>•</span>
+                <p style={{ color: colors.text, fontSize: '15px', flex: 1, lineHeight: '22px', margin: 0 }}>{tip}</p>
+              </div>
+            ))}
+          </Card>
+
+          {activePlayer && (
+            <div style={{ backgroundColor: colors.surface, borderRadius: '16px', padding: '20px', width: '100%', maxWidth: '600px', alignItems: 'center', marginTop: '16px', marginBottom: '32px' }}>
+              <div style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '8px', textTransform: 'uppercase' }}>
+                {canConfirm ? 'Sigues jugando:' : 'Jugando ahora:'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center' }}>
+                {(() => {
+                  const playerId = typeof activePlayer.user === 'object' ? (activePlayer.user.id || activePlayer.user._id) : activePlayer.user;
+                  const playerGoogleAvatar = typeof activePlayer.user === 'object' ? activePlayer.user.avatar : null;
+                  const playerSelectedAvatar = playerAvatars && playerAvatars[playerId] ? playerAvatars[playerId] : null;
+                  const hasSelectedAvatar = playerSelectedAvatar && playerSelectedAvatar !== '👤';
+                  
+                  if (hasSelectedAvatar) {
+                    return <div style={{ fontSize: '40px' }}>{playerSelectedAvatar}</div>;
+                  } else if (playerGoogleAvatar) {
+                    return (
+                      <img 
+                        src={playerGoogleAvatar} 
+                        alt="Avatar"
+                        style={{ 
+                          width: '40px', 
+                          height: '40px', 
+                          borderRadius: '50%', 
+                          objectFit: 'cover',
+                          border: '2px solid rgba(255, 255, 255, 0.3)'
+                        }} 
+                      />
+                    );
+                  } else {
+                    return <div style={{ fontSize: '40px' }}>👤</div>;
+                  }
+                })()}
+                <div style={{ color: colors.text, fontSize: '24px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                  {typeof activePlayer.user === 'object' ? activePlayer.user.username : 'Jugador'}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {canConfirm ? (
+            <>
+              <Button
+                title="¡Continuar!"
+                onClick={handleRoundIntroSeen}
+                size="large"
+                style={{ marginHorizontal: '24px', marginBottom: '8px' }}
+              />
+              <button
+                onClick={() => setShowExitModal(true)}
+                style={{
+                  width: 'calc(100% - 48px)',
+                  margin: '0 24px 32px 24px',
+                  textAlign: 'center',
+                  padding: '8px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  color: colors.textMuted,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                🚪 Salir del Juego
+              </button>
+            </>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '24px', color: colors.textMuted }}>
+              <p style={{ fontSize: '16px', marginBottom: '8px' }}>Esperando a que el jugador continúe...</p>
+              <div style={{ fontSize: '32px' }}>⏳</div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ROUND INTRO SCREEN
   if (game.status === 'playing' && game.showingRoundIntro) {
@@ -335,10 +757,10 @@ function GameRoom() {
           <Button
             title="Salir"
             onClick={() => {
-              if (window.confirm('¿Estás seguro de que quieres salir del juego?')) {
-                socketService.leaveGame(roomCode);
-                socketService.disconnect();
-                navigate('/dashboard');
+              if (isHost) {
+                setShowCancelModal(true);
+              } else {
+                setShowLeaveModal(true);
               }
             }}
             variant="secondary"
@@ -353,7 +775,7 @@ function GameRoom() {
           </div>
 
           <div style={{ fontSize: '80px', marginBottom: '16px' }}>{roundInfo.icon}</div>
-          <h1 style={{ color: colors.text, fontSize: '42px', fontWeight: 'bold', marginBottom: '16px', letterSpacing: '2px' }}>
+          <h1 style={{ color: colors.text, fontSize: '42px', fontWeight: 'bold', marginBottom: '16px', letterSpacing: '2px', textTransform: 'uppercase' }}>
             {roundInfo.title}
           </h1>
           <p style={{ color: colors.textSecondary, fontSize: '18px', textAlign: 'center', marginBottom: '32px', lineHeight: '26px', maxWidth: '600px' }}>
@@ -564,35 +986,41 @@ function GameRoom() {
       {/* Waiting for players */}
       {game.status === 'waiting' && (
         <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <span style={{ color: colors.text, fontWeight: 'bold' }}>Código de Sala</span>
-            <button
-              onClick={shareRoomCode}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                backgroundColor: colors.primary,
-                padding: '8px 16px',
-                borderRadius: '8px',
-                border: 'none',
-                color: colors.text,
-                fontWeight: 'bold',
-                cursor: 'pointer',
-              }}
-            >
-              <span>{game.roomCode}</span>
-              <span>📤</span>
-            </button>
+          {/* Header con código de sala */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+            <h2 style={{ color: colors.text, fontWeight: 'bold', fontSize: '20px', textTransform: 'uppercase', margin: 0 }}>
+              Sala: {game.roomCode}
+            </h2>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <Button
+                title="Compartir 📤"
+                onClick={shareRoomCode}
+                size="small"
+              />
+              {isHost ? (
+                <Button
+                  title="Cancelar Partida"
+                  onClick={() => setShowCancelModal(true)}
+                  variant="danger"
+                  size="small"
+                />
+              ) : (
+                <Button
+                  title="Salirse"
+                  onClick={handleLeaveGame}
+                  size="small"
+                />
+              )}
+            </div>
           </div>
 
           {/* Mostrar categoría si se usa */}
           {usesCategory && categoryInfo && (
-            <div style={{ display: 'flex', alignItems: 'center', backgroundColor: `${colors.primary}15`, borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', backgroundColor: `${colors.primary}15`, borderRadius: '12px', padding: '12px', marginBottom: '24px' }}>
               <span style={{ fontSize: '32px', marginRight: '12px' }}>{categoryInfo.icon}</span>
               <div style={{ flex: 1 }}>
-                <p style={{ color: colors.primary, fontSize: '16px', fontWeight: 'bold', margin: 0 }}>
-                  Categoría: {categoryInfo.name}
+                <p style={{ color: colors.primary, fontSize: '16px', fontWeight: 'bold', margin: 0, textTransform: 'uppercase' }}>
+                  {categoryInfo.name}
                 </p>
                 <p style={{ color: colors.textMuted, fontSize: '12px', margin: 0 }}>
                   {game.characters?.length || 0} personajes
@@ -601,20 +1029,97 @@ function GameRoom() {
             </div>
           )}
 
-          <div style={{ backgroundColor: colors.surfaceLight, borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
-            <p style={{ color: colors.textMuted, fontSize: '14px', margin: '0 0 4px 0' }}>
-              Jugadores: {game.players.length} / {game.numPlayers || 4}
-            </p>
-            {!usesCategory && (
-              <p style={{ color: colors.textMuted, fontSize: '14px', margin: 0 }}>
-                Personajes: {game.characters?.length || 0} / {totalCharactersNeeded}
-              </p>
-            )}
+          {/* Selección de avatar */}
+          {needsToSelectAvatar && (
+            <div style={{ marginBottom: '24px' }}>
+              <AvatarSelector
+                selectedAvatar={selectedAvatar}
+                onSelect={setSelectedAvatar}
+              />
+              <Button
+                title={submittingAvatar ? 'Guardando...' : 'Confirmar Avatar'}
+                onClick={handleSubmitAvatar}
+                loading={submittingAvatar}
+                style={{ width: '100%', marginTop: '16px' }}
+              />
+            </div>
+          )}
+
+          {/* Lista de jugadores */}
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{ color: colors.text, fontWeight: 'bold', fontSize: '18px', textTransform: 'uppercase', marginBottom: '16px', textAlign: 'center' }}>
+              Jugadores ({game.players.length} / {game.numPlayers || 4})
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '12px' }}>
+              {game.players.map((player, index) => {
+                const playerId = typeof player.user === 'object' ? player.user.id : player.user;
+                const playerName = typeof player.user === 'object' ? player.user.username : 'Jugador';
+                const playerGoogleAvatar = typeof player.user === 'object' ? player.user.avatar : null;
+                const playerSelectedAvatar = playerAvatars && playerAvatars[playerId] ? playerAvatars[playerId] : null;
+                // Priorizar avatar seleccionado en la partida, si no hay, usar avatar de Google, si no hay ninguno, usar emoji por defecto
+                const hasSelectedAvatar = playerSelectedAvatar && playerSelectedAvatar !== '👤';
+                const isMe = playerId === user?.id;
+                return (
+                  <div
+                    key={index}
+                    style={{
+                      backgroundColor: isMe ? `${colors.primary}20` : colors.surfaceLight,
+                      borderRadius: '12px',
+                      padding: '16px',
+                      textAlign: 'center',
+                      border: isMe ? `2px solid ${colors.primary}` : '2px solid transparent',
+                    }}
+                  >
+                    {hasSelectedAvatar ? (
+                      <div style={{ fontSize: '48px', marginBottom: '8px' }}>{playerSelectedAvatar}</div>
+                    ) : playerGoogleAvatar ? (
+                      <img 
+                        src={playerGoogleAvatar} 
+                        alt={playerName}
+                        style={{ 
+                          width: '48px', 
+                          height: '48px', 
+                          borderRadius: '50%', 
+                          marginBottom: '8px',
+                          objectFit: 'cover',
+                          border: '2px solid rgba(255, 255, 255, 0.3)'
+                        }} 
+                      />
+                    ) : (
+                      <div style={{ fontSize: '48px', marginBottom: '8px' }}>👤</div>
+                    )}
+                    <p style={{ 
+                      color: colors.text, 
+                      fontSize: '14px', 
+                      fontWeight: 'bold', 
+                      margin: 0,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      wordBreak: 'break-word'
+                    }}>
+                      {playerName}
+                      {isMe && ' (Tú)'}
+                    </p>
+                    {isHost && playerId === (typeof game.host === 'object' ? (game.host.id || game.host._id) : game.host) && (
+                      <span style={{ 
+                        fontSize: '10px', 
+                        color: colors.primary, 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                      }}>
+                        Anfitrión
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
+          {/* Formulario de personajes */}
           {needsToSubmitCharacters && (
-            <div style={{ marginTop: '16px' }}>
-              <h3 style={{ color: colors.text, fontWeight: 'bold', marginBottom: '12px' }}>
+            <div style={{ marginTop: '24px', marginBottom: '24px' }}>
+              <h3 style={{ color: colors.text, fontWeight: 'bold', marginBottom: '12px', textTransform: 'uppercase' }}>
                 Ingresa tus {charsPerPlayer} personajes
               </h3>
               {Array(charsPerPlayer).fill(0).map((_, index) => (
@@ -629,24 +1134,27 @@ function GameRoom() {
                 title={submittingCharacters ? 'Enviando...' : 'Agregar'}
                 onClick={handleSubmitCharacters}
                 loading={submittingCharacters}
-                style={{ marginTop: '12px' }}
+                style={{ marginTop: '12px', width: '100%' }}
               />
             </div>
           )}
 
+          {/* Tus personajes */}
           {!usesCategory && !needsToSubmitCharacters && myCharacters.length > 0 && (
-            <div style={{ marginTop: '16px' }}>
-              <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '8px' }}>Tus personajes:</p>
+            <div style={{ marginTop: '16px', marginBottom: '24px' }}>
+              <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '8px', textTransform: 'uppercase' }}>Tus personajes:</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {myCharacters.map((char, i) => (
                   <span
                     key={i}
                     style={{
                       backgroundColor: `${colors.primary}20`,
-                      padding: '4px 12px',
+                      padding: '6px 14px',
                       borderRadius: '20px',
                       color: colors.primaryLight,
                       fontSize: '14px',
+                      fontWeight: '600',
+                      border: `1px solid ${colors.primary}40`,
                     }}
                   >
                     {char}
@@ -656,19 +1164,71 @@ function GameRoom() {
             </div>
           )}
 
-          {!needsToSubmitCharacters && (
-            <div style={{ marginTop: '16px', textAlign: 'center' }}>
-              <p style={{ color: colors.textMuted }}>Esperando jugadores...</p>
+          {/* Estado de espera */}
+          {!needsToSubmitCharacters && !needsToSelectAvatar && (
+            <div style={{ marginTop: '24px', textAlign: 'center' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ color: colors.textMuted, fontSize: '16px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  Esperando jugadores
+                </p>
+                <LoadingDots />
+              </div>
+              {!usesCategory && (
+                <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '16px' }}>
+                  Personajes: {game.characters?.length || 0} / {totalCharactersNeeded}
+                </p>
+              )}
               {isHost && (usesCategory || game.characters?.length >= totalCharactersNeeded) && game.players.length >= 2 && (
-                <Button title="Iniciar Partida" onClick={handleStart} size="large" style={{ marginTop: '16px' }} />
+                <div style={{ marginTop: '24px' }}>
+                  <Button 
+                    title="Iniciar Partida" 
+                    onClick={handleStart} 
+                    size="large" 
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              )}
+              {!isHost && (
+                <div style={{ marginTop: '24px' }}>
+                  <Button 
+                    title="Salirse de la Partida" 
+                    onClick={() => setShowLeaveModal(true)} 
+                    size="large" 
+                    style={{ width: '100%' }}
+                  />
+                </div>
               )}
             </div>
           )}
         </Card>
       )}
 
+      {/* Modal de confirmación para cancelar partida */}
+      <Modal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        title="Cancelar Partida"
+        message="¿Estás seguro de que quieres cancelar la partida? Todos los jugadores serán expulsados y se perderá el progreso."
+        onConfirm={handleCancelGame}
+        confirmText="Cancelar Partida"
+        cancelText="Volver"
+        variant="danger"
+      />
+
+      {/* Modal de confirmación para salirse de la partida */}
+      <Modal
+        isOpen={showLeaveModal}
+        onClose={() => setShowLeaveModal(false)}
+        title="Salirse de la Partida"
+        message="¿Estás seguro de que quieres salirte de la partida? Se perderá tu progreso actual."
+        onConfirm={handleLeaveGame}
+        confirmText="Salirse"
+        cancelText="Cancelar"
+        variant="danger"
+      />
+
       {/* Playing */}
-      {game.status === 'playing' && !game.waitingForPlayer && !game.showingRoundIntro && (
+      {game.status === 'playing' && !game.waitingForPlayer && !game.showingRoundIntro && !game.showingRoundIntroMidTurn && (
         <>
           <Modal
             isOpen={showExitModal}
@@ -694,7 +1254,7 @@ function GameRoom() {
               )}
             </div>
             <div style={{
-              backgroundColor: timeLeft <= 10 ? colors.danger : colors.primary,
+              backgroundColor: getCurrentTimeLeft() <= 10 ? colors.danger : colors.primary,
               width: '56px',
               height: '56px',
               borderRadius: '28px',
@@ -702,7 +1262,7 @@ function GameRoom() {
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <span style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold' }}>{timeLeft}s</span>
+              <span style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold' }}>{getCurrentTimeLeft()}s</span>
             </div>
           </div>
 
@@ -737,20 +1297,47 @@ function GameRoom() {
           </div>
 
           {/* Tarjeta del personaje */}
-          <div style={{
-            backgroundColor: colors.surface,
-            borderRadius: '24px',
-            padding: '32px',
-            alignItems: 'center',
-            border: `3px solid ${colors.primary}`,
-            marginBottom: '16px',
-            transform: `scale(${cardScale})`,
-            transition: 'transform 0.15s',
-          }}>
-            <h2 style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold', textAlign: 'center', letterSpacing: '1px', margin: 0 }}>
-              {isCurrentTeam ? (currentCharacter?.toUpperCase() || 'SIN TARJETAS') : '???'}
-            </h2>
-          </div>
+          {isCurrentTeam ? (
+            <div
+              className="character-game-card"
+              onMouseDown={() => setIsCardPressed(true)}
+              onMouseUp={() => setIsCardPressed(false)}
+              onMouseLeave={() => setIsCardPressed(false)}
+              onTouchStart={() => setIsCardPressed(true)}
+              onTouchEnd={() => setIsCardPressed(false)}
+              data-flipped={isCardPressed}
+            >
+              <div className="card-face card-back">
+                <div className="card-back-content">
+                  <img src="/img/logo-personajes.png" alt="Personajes" className="card-logo" />
+                  <div className="card-instruction">
+                    MANTÉN PRESIONADO
+                  </div>
+                  <div className="card-instruction-subtitle">
+                    para ver el personaje
+                  </div>
+                </div>
+              </div>
+              <div className="card-face card-front">
+                <div className="character-name">
+                  {currentCharacter?.toUpperCase() || 'SIN TARJETAS'}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              backgroundColor: colors.surface,
+              borderRadius: '24px',
+              padding: '32px',
+              alignItems: 'center',
+              border: `3px solid ${colors.primary}`,
+              marginBottom: '16px',
+            }}>
+              <h2 style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold', textAlign: 'center', letterSpacing: '1px', margin: 0 }}>
+                ???
+              </h2>
+            </div>
+          )}
 
           <p style={{ color: colors.textMuted, fontSize: '14px', textAlign: 'center', marginBottom: '16px' }}>
             {availableCharacters.length} personajes restantes
@@ -760,45 +1347,17 @@ function GameRoom() {
             <div style={{ display: 'flex', gap: '16px', marginBottom: '12px' }}>
               <button
                 onClick={handleFail}
-                style={{
-                  flex: 1,
-                  backgroundColor: colors.danger,
-                  borderRadius: '16px',
-                  padding: '20px',
-                  border: 'none',
-                  color: colors.text,
-                  fontSize: '32px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                className="action-button fail-button"
               >
-                <span>✗</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', marginTop: '4px' }}>FALLO</span>
+                <div className="action-icon">✗</div>
+                <div className="action-label">FALLO</div>
               </button>
               <button
                 onClick={handleHit}
-                style={{
-                  flex: 1,
-                  backgroundColor: colors.success,
-                  borderRadius: '16px',
-                  padding: '20px',
-                  border: 'none',
-                  color: colors.text,
-                  fontSize: '32px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                className="action-button success-button"
               >
-                <span>✓</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', marginTop: '4px' }}>ACIERTO</span>
+                <div className="action-icon">✓</div>
+                <div className="action-label">ACIERTO</div>
               </button>
             </div>
           ) : (
@@ -869,14 +1428,16 @@ function GameRoom() {
 
       {/* Finished */}
       {game.status === 'finished' && (
-        <>
-          <div style={{ alignItems: 'center', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: '600px', margin: '0 auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '24px', width: '100%' }}>
             <div style={{ fontSize: '56px', marginBottom: '8px' }}>🏆</div>
-            <h1 style={{ color: colors.text, fontSize: '26px', fontWeight: 'bold', marginBottom: '20px' }}>
+            <h1 style={{ color: colors.text, fontSize: '26px', fontWeight: 'bold', marginBottom: '20px', textAlign: 'center' }}>
               ¡Juego Terminado!
             </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', marginBottom: '16px', width: '100%' }}>
               <div style={{
+                display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 padding: '16px',
                 borderRadius: '16px',
@@ -888,6 +1449,8 @@ function GameRoom() {
               </div>
               <span style={{ color: colors.textMuted, fontSize: '16px' }}>vs</span>
               <div style={{
+                display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 padding: '16px',
                 borderRadius: '16px',
@@ -898,13 +1461,13 @@ function GameRoom() {
                 <p style={{ color: colors.text, fontSize: '40px', fontWeight: 'bold', margin: 0 }}>{team2Score}</p>
               </div>
             </div>
-            <h2 style={{ color: colors.text, fontSize: '22px', fontWeight: 'bold', marginBottom: '8px' }}>
+            <h2 style={{ color: colors.text, fontSize: '22px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>
               {team1Score > team2Score ? '🎉 ¡Equipo 1 Gana!' : team2Score > team1Score ? '🎉 ¡Equipo 2 Gana!' : '🤝 ¡Empate!'}
             </h2>
           </div>
 
           {/* Ranking de jugadores */}
-          <Card style={{ marginBottom: '16px' }}>
+          <Card style={{ marginBottom: '16px', width: '100%' }}>
             <h3 style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
               📊 Estadísticas de Jugadores
             </h3>
@@ -950,8 +1513,15 @@ function GameRoom() {
             })}
           </Card>
 
-          <Button title="Volver al Dashboard" onClick={() => navigate('/dashboard')} size="large" style={{ marginTop: '16px' }} />
-        </>
+          <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+            <Button 
+              title="Volver al Dashboard" 
+              onClick={() => navigate('/dashboard')} 
+              size="large" 
+              style={{ width: '100%' }} 
+            />
+          </div>
+        </div>
       )}
 
     </div>

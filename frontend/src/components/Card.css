@@ -1,0 +1,79 @@
+.card {
+  background-color: rgba(30, 37, 74, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 20px 32px;
+  border: none;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  cursor: default;
+  transition: all 0.3s ease;
+}
+
+.card.clickable {
+  cursor: pointer;
+}
+
+.card.clickable:hover {
+  transform: translateY(-4px);
+  background-color: rgba(30, 37, 74, 0.95);
+}
+
+.action-card {
+  background-color: rgba(30, 37, 74, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 20px 32px;
+  margin-bottom: 16px;
+  border: none;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.action-card:hover {
+  opacity: 0.8;
+  transform: translateY(-2px);
+}
+
+.action-card-icon {
+  font-size: 36px;
+}
+
+.action-card-content {
+  flex: 1;
+}
+
+.action-card-title {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: bold;
+  margin: 0 0 4px 0;
+  text-transform: uppercase;
+}
+
+.action-card-description {
+  color: #B0B0B0;
+  font-size: 14px;
+  margin: 0;
+}
+
+.action-card-badge {
+  background-color: rgba(14, 165, 233, 0.2);
+  color: #38bdf8;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.action-card-arrow {
+  color: #B0B0B0;
+  font-size: 20px;
+}

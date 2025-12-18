@@ -46,6 +46,17 @@ const Game = sequelize.define('Game', {
       this.setDataValue('playerCharacters', JSON.stringify(value));
     }
   },
+  playerAvatars: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const value = this.getDataValue('playerAvatars');
+      return value ? JSON.parse(value) : {};
+    },
+    set(value) {
+      this.setDataValue('playerAvatars', JSON.stringify(value));
+    }
+  },
   characters: {
     type: DataTypes.TEXT,
     allowNull: false,
@@ -169,6 +180,11 @@ const Game = sequelize.define('Game', {
   },
   // Si estamos mostrando intro de ronda
   showingRoundIntro: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  // Si estamos mostrando intro de ronda en medio de un turno (preserva tiempo)
+  showingRoundIntroMidTurn: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
   },

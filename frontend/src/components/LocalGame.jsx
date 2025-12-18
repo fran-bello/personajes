@@ -48,6 +48,7 @@ function LocalGame() {
   const categories = getCategoriesForUI();
   const [players, setPlayers] = useState([]);
   const [roundPlayerIndex, setRoundPlayerIndex] = useState(0);
+  const [globalPlayerIndex, setGlobalPlayerIndex] = useState(0); // Índice global para alternar entre equipos
   const [characters, setCharacters] = useState([]);
   const [currentCharacter, setCurrentCharacter] = useState(null);
   const [roundCharacters, setRoundCharacters] = useState([]);
@@ -314,15 +315,98 @@ function LocalGame() {
     setIsPaused(true);
     setGameState('round_intro');
     setRoundPlayerIndex(0);
+    setGlobalPlayerIndex(0); // Inicializar índice global
+    setCurrentTeam(1);
     setTimeLeft(parseInt(timePerRound) || 60);
     // Inicializar scores dinámicamente según número de equipos
     setScores(initializeScores());
   };
 
+  // Helper para calcular el siguiente turno alternando entre equipos y jugadores
+  const getNextTurn = (playersList, currentGlobalIndex) => {
+    // Organizar jugadores por equipo
+    const playersByTeam = {};
+    playersList.forEach((player) => {
+      const team = player.team;
+      if (!playersByTeam[team]) {
+        playersByTeam[team] = [];
+      }
+      playersByTeam[team].push(player);
+    });
+
+    // Obtener todos los equipos y ordenarlos
+    const teams = Object.keys(playersByTeam).map(Number).sort((a, b) => a - b);
+    const totalTeams = teams.length;
+    const maxPlayersPerTeam = Math.max(...teams.map(team => playersByTeam[team].length));
+
+    // Calcular el siguiente índice global
+    const nextGlobalIndex = currentGlobalIndex + 1;
+    
+    // Calcular qué posición de jugador dentro del equipo (0, 1, 2, ...)
+    const playerPosition = Math.floor(nextGlobalIndex / totalTeams);
+    
+    // Calcular qué equipo debe jugar (alternando)
+    const teamIndex = nextGlobalIndex % totalTeams;
+    const nextTeam = teams[teamIndex];
+    
+    // Obtener el jugador específico de ese equipo en esa posición
+    const teamPlayers = playersByTeam[nextTeam] || [];
+    const playerIndexInTeam = playerPosition % teamPlayers.length;
+    
+    // Si hemos completado una ronda completa de todos los jugadores de todos los equipos, reiniciar
+    if (playerPosition >= maxPlayersPerTeam && teamIndex === 0) {
+      return {
+        team: teams[0],
+        playerIndexInTeam: 0,
+        globalIndex: 0
+      };
+    }
+
+    return {
+      team: nextTeam,
+      playerIndexInTeam: playerIndexInTeam,
+      globalIndex: nextGlobalIndex
+    };
+  };
+
+  // Helper para obtener el equipo y jugador actual basándose en el índice global
+  const getCurrentTurn = (playersList, currentGlobalIndex) => {
+    // Organizar jugadores por equipo
+    const playersByTeam = {};
+    playersList.forEach((player) => {
+      const team = player.team;
+      if (!playersByTeam[team]) {
+        playersByTeam[team] = [];
+      }
+      playersByTeam[team].push(player);
+    });
+
+    // Obtener todos los equipos y ordenarlos
+    const teams = Object.keys(playersByTeam).map(Number).sort((a, b) => a - b);
+    const totalTeams = teams.length;
+
+    // Calcular qué posición de jugador dentro del equipo (0, 1, 2, ...)
+    const playerPosition = Math.floor(currentGlobalIndex / totalTeams);
+    
+    // Calcular qué equipo debe jugar (alternando)
+    const teamIndex = currentGlobalIndex % totalTeams;
+    const currentTeamNum = teams[teamIndex];
+    
+    // Obtener el jugador específico de ese equipo en esa posición
+    const teamPlayers = playersByTeam[currentTeamNum] || [];
+    const playerIndexInTeam = playerPosition % teamPlayers.length;
+
+    return {
+      team: currentTeamNum,
+      playerIndexInTeam: playerIndexInTeam
+    };
+  };
+
   const getCurrentPlayer = () => {
-    const teamPlayers = players.filter(p => p.team === currentTeam);
+    const currentTurn = getCurrentTurn(players, globalPlayerIndex);
+    const teamPlayers = players.filter(p => p.team === currentTurn.team);
     if (teamPlayers.length === 0) return null;
-    return teamPlayers[roundPlayerIndex % teamPlayers.length];
+    return teamPlayers[currentTurn.playerIndexInTeam];
   };
 
   const getTotalScore = (team) => {
@@ -387,13 +471,17 @@ function LocalGame() {
         setBlockedCharacters([]);
         setCurrentCharacter(pickRandomCharacter(newChars, []));
         setGameState('round_intro_mid_turn');
+        // No cambiar turno en cambio de ronda mid-turn, mantener el mismo jugador
       } else {
         setGameState('finished');
       }
     } else {
+      // Hay personajes restantes: solo cambiar el personaje, mantener el mismo turno
+      // El jugador continúa jugando hasta que falle o se le acabe el tiempo
       setRoundCharacters(newRoundCharacters);
       const newChar = pickRandomCharacter(newRoundCharacters, blockedCharacters);
       setCurrentCharacter(newChar);
+      // No cambiar turno, el jugador sigue jugando
     }
   };
 
@@ -402,25 +490,16 @@ function LocalGame() {
     
     setIsPaused(true);
     
-    const currentTeamPlayers = players.filter(p => p.team === currentTeam);
-    const maxPlayersPerTeam = Math.max(...Array.from({ length: getNumTeams() }, (_, i) => {
-      const teamPlayers = players.filter(p => p.team === i + 1);
-      return teamPlayers.length;
-    }));
+    // Avanzar al siguiente turno alternando entre equipos usando la función helper
+    const nextTurn = getNextTurn(players, globalPlayerIndex);
     
-    // Avanzar al siguiente jugador del mismo equipo
-    const nextPlayerIndex = (roundPlayerIndex + 1) % maxPlayersPerTeam;
+    // Si se completó un ciclo completo (vuelve al índice 0) pero todavía hay personajes,
+    // simplemente continuar con el siguiente ciclo sin cambiar de ronda
+    // El cambio de ronda solo ocurre cuando se terminan todos los personajes (en advanceAfterHit)
     
-    // Si llegamos al final de los jugadores del equipo actual, cambiar al siguiente equipo
-    if (nextPlayerIndex === 0 && roundPlayerIndex === currentTeamPlayers.length - 1) {
-      const numTeams = getNumTeams();
-      const nextTeam = currentTeam >= numTeams ? 1 : currentTeam + 1;
-      setCurrentTeam(nextTeam);
-      setRoundPlayerIndex(0);
-    } else {
-      setRoundPlayerIndex(nextPlayerIndex);
-    }
-    
+    setGlobalPlayerIndex(nextTurn.globalIndex);
+    setCurrentTeam(nextTurn.team);
+    setRoundPlayerIndex(nextTurn.playerIndexInTeam);
     setBlockedCharacters([]);
     setCurrentCharacter(pickRandomCharacter(roundCharacters, []));
     setTimeLeft(timePerRoundInt);
@@ -489,6 +568,8 @@ function LocalGame() {
     setCurrentCharacter(null);
     setRound(1);
     setCurrentTeam(1);
+    setRoundPlayerIndex(0);
+    setGlobalPlayerIndex(0); // Resetear índice global
     setScores({ round1: { team1: 0, team2: 0 }, round2: { team1: 0, team2: 0 }, round3: { team1: 0, team2: 0 } });
     setUsedAvatars([]);
     setSelectedAvatar(LOCAL_AVATARS[0]);
@@ -508,6 +589,7 @@ function LocalGame() {
     setRound(1);
     setCurrentTeam(1);
     setRoundPlayerIndex(0);
+    setGlobalPlayerIndex(0); // Resetear índice global
     setScores({ round1: { team1: 0, team2: 0 }, round2: { team1: 0, team2: 0 }, round3: { team1: 0, team2: 0 } });
     setBlockedCharacters([]);
     setPlayerStats({});
@@ -727,13 +809,13 @@ function LocalGame() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <span style={{ fontSize: '28px' }}>🎮</span>
-              <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0 }}>Juego Local</h1>
+              <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0, textTransform: 'uppercase' }}>Juego Local</h1>
             </div>
             <Button title="Volver" onClick={() => navigate('/dashboard')} variant="secondary" size="small" />
           </div>
 
           <Card>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: colors.text, marginBottom: '16px' }}>Configurar Partida</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: colors.text, marginBottom: '16px', textTransform: 'uppercase' }}>Configurar Partida</h2>
             <Input
               label="Número de jugadores"
               value={numPlayers}
@@ -862,35 +944,23 @@ function LocalGame() {
                 />
                 {category && (
                   <p style={{ color: colors.primary, fontSize: '13px', marginTop: '4px', marginBottom: '8px', fontStyle: 'italic' }}>
-                    📋 Los jugadores agregarán personajes de: {category}
+                    Los jugadores agregarán personajes de: {category}
                   </p>
                 )}
               </>
             ) : (
               <div style={{ marginTop: '8px' }}>
                 <p style={{ color: colors.textSecondary, fontSize: '12px', marginBottom: '8px' }}>Selecciona una categoría:</p>
-                <div style={{ display: 'flex', overflowX: 'auto', gap: '10px', marginBottom: '12px', paddingBottom: '8px' }}>
+                <div className="categories-grid">
                   {categories.map((cat) => (
                     <div
                       key={cat.id}
                       onClick={() => selectCategory(cat.id)}
-                      style={{
-                        minWidth: '120px',
-                        backgroundColor: selectedCategory?.id === cat.id ? colors.surface : colors.surfaceLight,
-                        borderRadius: '12px',
-                        padding: '12px',
-                        textAlign: 'center',
-                        border: `2px solid ${selectedCategory?.id === cat.id ? colors.primary : 'transparent'}`,
-                        cursor: 'pointer',
-                      }}
+                      className={`category-card ${selectedCategory?.id === cat.id ? 'selected' : ''}`}
                     >
-                      <div style={{ fontSize: '32px', marginBottom: '8px' }}>{cat.icon}</div>
-                      <div style={{
-                        color: selectedCategory?.id === cat.id ? colors.primary : colors.text,
-                        fontSize: '13px',
-                        fontWeight: '600',
-                      }}>{cat.name}</div>
-                      <div style={{ color: colors.textMuted, fontSize: '11px', marginTop: '4px' }}>{cat.characterCount} personajes</div>
+                      <div className="category-icon">{cat.icon}</div>
+                      <div className="category-name">{cat.name}</div>
+                      <div className="category-count">{cat.characterCount} personajes</div>
                     </div>
                   ))}
                 </div>
@@ -927,7 +997,7 @@ function LocalGame() {
               title="Continuar"
               onClick={handleConfigSubmit}
               size="large"
-              style={{ marginTop: '16px' }}
+              style={{ width: '100%', marginTop: '16px' }}
               disabled={usePresetCategory && !selectedCategory}
             />
           </Card>
@@ -959,7 +1029,11 @@ function LocalGame() {
 
           {category && (
             <div style={{ display: 'flex', alignItems: 'center', backgroundColor: colors.primary, borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
-              <span style={{ fontSize: '28px', marginRight: '12px' }}>🎯</span>
+              {usePresetCategory && selectedCategory && (
+                <span style={{ fontSize: '28px', marginRight: '12px' }}>
+                  {selectedCategory.icon}
+                </span>
+              )}
               <div style={{ flex: 1 }}>
                 <div style={{ color: colors.text, fontSize: '10px', fontWeight: '600', letterSpacing: '1px', opacity: 0.8 }}>CATEGORÍA</div>
                 <div style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold' }}>{category}</div>
@@ -1212,7 +1286,9 @@ function LocalGame() {
           )}
 
           {players.length >= parseInt(numPlayers) && (usePresetCategory || characters.length >= totalCharactersNeeded) && (
-            <Button title="Iniciar Juego" onClick={handleStartGame} size="large" style={{ marginBottom: '40px' }} />
+            <div style={{ marginBottom: '40px' }}>
+              <Button title="Iniciar Juego" onClick={handleStartGame} size="large" style={{ width: '100%' }} />
+            </div>
           )}
         </div>
       </div>
@@ -1548,37 +1624,30 @@ function LocalGame() {
         <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '0 24px' }}>
           <div style={{ width: '100%' }}>
             <div
+              className="character-game-card"
               onMouseDown={() => setIsCardPressed(true)}
               onMouseUp={() => setIsCardPressed(false)}
               onMouseLeave={() => setIsCardPressed(false)}
-              style={{
-                width: '100%',
-                backgroundColor: isCardPressed ? colors.surface : colors.surfaceLight,
-                borderRadius: '24px',
-                padding: '32px',
-                textAlign: 'center',
-                border: `3px solid ${isCardPressed ? colors.primary : colors.border}`,
-                borderStyle: isCardPressed ? 'solid' : 'dashed',
-                minHeight: '150px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                transform: `scale(${isCardPressed ? 0.95 : 1})`,
-              }}
+              onTouchStart={() => setIsCardPressed(true)}
+              onTouchEnd={() => setIsCardPressed(false)}
+              data-flipped={isCardPressed}
             >
-              {isCardPressed ? (
-                <div style={{ color: colors.text, fontSize: '36px', fontWeight: 'bold', textAlign: 'center', letterSpacing: '1px' }}>
+              <div className="card-face card-back">
+                <div className="card-back-content">
+                  <img src="/img/logo-personajes.png" alt="Personajes" className="card-logo" />
+                  <div className="card-instruction">
+                    MANTÉN PRESIONADO
+                  </div>
+                  <div className="card-instruction-subtitle">
+                    para ver el personaje
+                  </div>
+                </div>
+              </div>
+              <div className="card-face card-front">
+                <div className="character-name">
                   {displayCharacter?.toUpperCase() || 'SIN TARJETAS'}
                 </div>
-              ) : (
-                <div style={{ alignItems: 'center' }}>
-                  <div style={{ fontSize: '40px', marginBottom: '12px', opacity: 0.6 }}>👁️</div>
-                  <div style={{ color: colors.textSecondary, fontSize: '16px', fontWeight: '600', letterSpacing: '1px' }}>MANTÉN PRESIONADO</div>
-                  <div style={{ color: colors.textMuted, fontSize: '13px', marginTop: '4px' }}>para ver el personaje</div>
-                </div>
-              )}
+              </div>
             </div>
 
             <div style={{ color: colors.textMuted, fontSize: '14px', marginTop: '16px', textAlign: 'center' }}>
@@ -1614,34 +1683,18 @@ function LocalGame() {
           <div style={{ display: 'flex', gap: '16px', marginBottom: '12px' }}>
             <button
               onClick={handleFail}
-              style={{
-                flex: 1,
-                backgroundColor: colors.danger,
-                borderRadius: '16px',
-                padding: '20px',
-                textAlign: 'center',
-                border: 'none',
-                cursor: 'pointer',
-              }}
+              className="action-button fail-button"
             >
-              <div style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold' }}>✗</div>
-              <div style={{ color: colors.text, fontSize: '14px', fontWeight: '700', marginTop: '4px' }}>FALLO</div>
+              <div className="action-icon">✗</div>
+              <div className="action-label">FALLO</div>
             </button>
             
             <button
               onClick={handleHit}
-              style={{
-                flex: 1,
-                backgroundColor: colors.success,
-                borderRadius: '16px',
-                padding: '20px',
-                textAlign: 'center',
-                border: 'none',
-                cursor: 'pointer',
-              }}
+              className="action-button success-button"
             >
-              <div style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold' }}>✓</div>
-              <div style={{ color: colors.text, fontSize: '14px', fontWeight: '700', marginTop: '4px' }}>ACIERTO</div>
+              <div className="action-icon">✓</div>
+              <div className="action-label">ACIERTO</div>
             </button>
           </div>
 
@@ -1791,7 +1844,7 @@ function LocalGame() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <Button title="🔄 Jugar Otra Vez (mismos jugadores)" onClick={playAgain} size="large" />
-            <Button title="🆕 Nueva Partida" onClick={resetGame} variant="outline" size="large" />
+            <Button title="Nueva Partida" onClick={resetGame} variant="outline" size="large" />
             <Button title="Volver al Menú" onClick={() => navigate('/dashboard')} variant="secondary" size="large" />
           </div>
         </div>
@@ -1889,35 +1942,23 @@ function LocalGame() {
                 />
                 {category && (
                   <p style={{ color: colors.primary, fontSize: '13px', marginTop: '4px', marginBottom: '8px', fontStyle: 'italic' }}>
-                    📋 Los jugadores agregarán personajes de: {category}
+                    Los jugadores agregarán personajes de: {category}
                   </p>
                 )}
               </>
             ) : (
               <div style={{ marginTop: '8px' }}>
                 <p style={{ color: colors.textSecondary, fontSize: '12px', marginBottom: '8px' }}>Selecciona una categoría:</p>
-                <div style={{ display: 'flex', overflowX: 'auto', gap: '10px', marginBottom: '12px', paddingBottom: '8px' }}>
+                <div className="categories-grid">
                   {categories.map((cat) => (
                     <div
                       key={cat.id}
                       onClick={() => selectCategory(cat.id)}
-                      style={{
-                        minWidth: '120px',
-                        backgroundColor: selectedCategory?.id === cat.id ? colors.surface : colors.surfaceLight,
-                        borderRadius: '12px',
-                        padding: '12px',
-                        textAlign: 'center',
-                        border: `2px solid ${selectedCategory?.id === cat.id ? colors.primary : 'transparent'}`,
-                        cursor: 'pointer',
-                      }}
+                      className={`category-card ${selectedCategory?.id === cat.id ? 'selected' : ''}`}
                     >
-                      <div style={{ fontSize: '32px', marginBottom: '8px' }}>{cat.icon}</div>
-                      <div style={{
-                        color: selectedCategory?.id === cat.id ? colors.primary : colors.text,
-                        fontSize: '13px',
-                        fontWeight: '600',
-                      }}>{cat.name}</div>
-                      <div style={{ color: colors.textMuted, fontSize: '11px', marginTop: '4px' }}>{cat.characterCount} personajes</div>
+                      <div className="category-icon">{cat.icon}</div>
+                      <div className="category-name">{cat.name}</div>
+                      <div className="category-count">{cat.characterCount} personajes</div>
                     </div>
                   ))}
                 </div>
@@ -1954,7 +1995,7 @@ function LocalGame() {
               title="Continuar"
               onClick={handleReconfigSubmit}
               size="large"
-              style={{ marginTop: '16px' }}
+              style={{ width: '100%', marginTop: '16px' }}
               disabled={usePresetCategory && !selectedCategory}
             />
           </Card>
@@ -1980,7 +2021,11 @@ function LocalGame() {
 
           {category && (
             <div style={{ display: 'flex', alignItems: 'center', backgroundColor: colors.primary, borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
-              <span style={{ fontSize: '28px', marginRight: '12px' }}>🎯</span>
+              {usePresetCategory && selectedCategory && (
+                <span style={{ fontSize: '28px', marginRight: '12px' }}>
+                  {selectedCategory.icon}
+                </span>
+              )}
               <div style={{ flex: 1 }}>
                 <div style={{ color: colors.text, fontSize: '10px', fontWeight: '600', letterSpacing: '1px', opacity: 0.8 }}>CATEGORÍA</div>
                 <div style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold' }}>{category}</div>
@@ -2012,12 +2057,13 @@ function LocalGame() {
               />
             ))}
 
-            <Button
-              title={currentPlayerForChars < players.length - 1 ? "Siguiente Jugador →" : "¡Comenzar Juego!"}
-              onClick={confirmNewCharacters}
-              size="large"
-              style={{ marginTop: '16px' }}
-            />
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+              <Button
+                title={currentPlayerForChars < players.length - 1 ? "Siguiente Jugador →" : "¡Comenzar Juego!"}
+                onClick={confirmNewCharacters}
+                size="large"
+              />
+            </div>
           </Card>
 
           <div style={{ marginTop: '8px', marginBottom: '40px' }}>

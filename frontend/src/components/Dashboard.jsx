@@ -1,167 +1,61 @@
-import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button, ActionCard, Card } from './index';
-import { colors } from '../theme';
+import './Dashboard.css';
 
 function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, fetchUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Refrescar datos del usuario cada vez que entres al Dashboard
+  // Esto asegura que las estadísticas estén actualizadas cuando se navega desde una partida terminada
+  useEffect(() => {
+    if (fetchUser) {
+      fetchUser();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]); // Ejecutar cada vez que cambie la ruta al Dashboard
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-  const containerStyle = {
-    minHeight: '100vh',
-    backgroundColor: 'transparent',
-    padding: '24px',
-    paddingBottom: '40px',
-  };
-
-  const headerStyle = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '24px',
-  };
-
-  const logoTitleStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  };
-
-  const logoStyle = {
-    fontSize: '40px',
-  };
-
-  const titleStyle = {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: colors.text,
-  };
-
-  const welcomeCardStyle = {
-    marginBottom: '24px',
-  };
-
-  const welcomeContentStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '16px',
-  };
-
-  const avatarStyle = {
-    width: '64px',
-    height: '64px',
-    borderRadius: '32px',
-    backgroundColor: colors.surfaceLight,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '32px',
-  };
-
-  const welcomeTextStyle = {
-    flex: 1,
-  };
-
-  const welcomeLabelStyle = {
-    fontSize: '14px',
-    color: colors.primaryLight,
-    fontWeight: '500',
-  };
-
-  const welcomeTitleStyle = {
-    fontSize: '22px',
-    fontWeight: 'bold',
-    color: colors.text,
-    marginTop: '2px',
-  };
-
-  const welcomeSubtitleStyle = {
-    fontSize: '13px',
-    color: colors.textSecondary,
-    marginTop: '4px',
-  };
-
-  const sectionTitleStyle = {
-    fontSize: '18px',
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: '16px',
-    marginTop: '8px',
-  };
-
-  const statsRowStyle = {
-    display: 'flex',
-    gap: '16px',
-    marginBottom: '24px',
-  };
-
-  const statCardStyle = {
-    flex: 1,
-    textAlign: 'center',
-  };
-
-  const statValueStyle = {
-    fontSize: '36px',
-    fontWeight: 'bold',
-    color: colors.primary,
-    marginBottom: '4px',
-  };
-
-  const statLabelStyle = {
-    fontSize: '12px',
-    color: colors.textMuted,
-  };
-
   return (
-    <div style={containerStyle}>
+    <div className="dashboard-container">
       {/* Header */}
-      <div style={headerStyle}>
-        <div style={logoTitleStyle}>
-          <span style={logoStyle}>🎭</span>
-          <h1 style={titleStyle}>Personajes</h1>
+      <div className="dashboard-header">
+        <div className="dashboard-logo-title">
+          <img src="/img/logo-personajes.png" alt="Personajes" className="dashboard-logo" />
+          <h1 className="dashboard-title">Personajes</h1>
         </div>
         <Button title="Salir" onClick={handleLogout} variant="secondary" size="small" />
       </div>
 
       {/* Welcome Card */}
-      <Card style={welcomeCardStyle}>
-        <div style={welcomeContentStyle}>
+      <Card className="welcome-card">
+        <div className="welcome-content">
           {user?.avatar ? (
             <img
               src={user.avatar}
               alt={user.username}
-              style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '32px',
-              }}
+              className="welcome-avatar"
             />
           ) : (
-            <div style={avatarStyle}>👤</div>
+            <div className="welcome-avatar">👤</div>
           )}
-          <div style={welcomeTextStyle}>
-            <div style={welcomeLabelStyle}>Bienvenido</div>
-            <div style={welcomeTitleStyle}>¡Hola, {user?.username}! 👋</div>
-            <div style={welcomeSubtitleStyle}>Listo para jugar con tus amigos</div>
+          <div className="welcome-text">
+            <div className="welcome-label">Bienvenido</div>
+            <div className="welcome-title">¡Hola, {user?.username}! 👋</div>
+            <div className="welcome-subtitle">Listo para jugar con tus amigos</div>
           </div>
         </div>
       </Card>
 
       {/* Actions */}
-      <h2 style={sectionTitleStyle}>¿Qué quieres hacer?</h2>
-
-      <ActionCard
-        icon="👤"
-        title="Gestionar Personajes"
-        description="Agrega, edita o elimina tus personajes personalizados"
-        badge={`${user?.characters?.length || 0} personajes`}
-        onClick={() => navigate('/characters')}
-      />
+      <h2 className="section-title">¿Qué quieres hacer?</h2>
 
       <ActionCard
         icon="🌐"
@@ -177,36 +71,43 @@ function Dashboard() {
         onClick={() => navigate('/local-game')}
       />
 
-      {/* Stats */}
-      <h2 style={sectionTitleStyle}>Tus estadísticas</h2>
+      <ActionCard
+        icon="📖"
+        title="¿Cómo Jugar?"
+        description="Aprende las reglas y consejos para ganar"
+        onClick={() => navigate('/how-to-play')}
+      />
 
-      <div style={statsRowStyle}>
-        <Card style={statCardStyle}>
-          <div style={statValueStyle}>{user?.gamesPlayed || 0}</div>
-          <div style={statLabelStyle}>Partidas Jugadas</div>
+      {/* Stats */}
+      <h2 className="section-title">Tus estadísticas</h2>
+
+      <div className="stats-row">
+        <Card className="stat-card">
+          <div className="stat-value">{user?.gamesPlayed || 0}</div>
+          <div className="stat-label">Partidas Jugadas</div>
         </Card>
 
-        <Card style={statCardStyle}>
-          <div style={{ ...statValueStyle, color: colors.success }}>
-            {user?.gamesWon || 0}
-          </div>
-          <div style={statLabelStyle}>Partidas Ganadas</div>
+        <Card className="stat-card">
+          <div className="stat-value success">{user?.gamesWon || 0}</div>
+          <div className="stat-label">Partidas Ganadas</div>
         </Card>
       </div>
 
       {/* Join Game */}
-      <Card style={{ marginTop: '24px' }}>
-        <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: colors.text, marginBottom: '8px' }}>
+      <Card className="join-game-card">
+        <h3 className="join-game-title">
           ¿Tienes un código de sala?
         </h3>
-        <p style={{ fontSize: '14px', color: colors.textMuted, marginBottom: '16px' }}>
+        <p className="join-game-description">
           Si alguien te compartió un código, únete a su partida
         </p>
-        <Button
-          title="Unirse a Partida"
-          onClick={() => navigate('/create-game')}
-          variant="outline"
-        />
+        <div style={{ width: '100%', marginTop: '16px' }}>
+          <Button
+            title="Unirse a Partida"
+            onClick={() => navigate('/create-game?mode=join')}
+            style={{ width: '100%' }}
+          />
+        </div>
       </Card>
     </div>
   );

@@ -5,22 +5,166 @@ const { Category, Character } = require('../models');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
+// Helper para calcular el siguiente turno alternando entre equipos y jugadores
+// El orden es: Jugador 1 Equipo 1, Jugador 1 Equipo 2, Jugador 2 Equipo 1, Jugador 2 Equipo 2, etc.
+const getNextTurn = (players, currentPlayerIndex) => {
+  // Organizar jugadores por equipo
+  const playersByTeam = {};
+  players.forEach((player, index) => {
+    const team = player.team;
+    if (!playersByTeam[team]) {
+      playersByTeam[team] = [];
+    }
+    playersByTeam[team].push({ ...player, originalIndex: index });
+  });
+
+  // Obtener todos los equipos y ordenarlos
+  const teams = Object.keys(playersByTeam).map(Number).sort((a, b) => a - b);
+  const maxPlayersPerTeam = Math.max(...teams.map(team => playersByTeam[team].length));
+  const totalTeams = teams.length;
+
+  // Calcular el siguiente índice global
+  const nextGlobalIndex = currentPlayerIndex + 1;
+  
+  // Calcular qué posición de jugador dentro del equipo (0, 1, 2, ...)
+  const playerPosition = Math.floor(nextGlobalIndex / totalTeams);
+  
+  // Calcular qué equipo debe jugar (alternando)
+  const teamIndex = nextGlobalIndex % totalTeams;
+  const nextTeam = teams[teamIndex];
+  
+  // Obtener el jugador específico de ese equipo en esa posición
+  const teamPlayers = playersByTeam[nextTeam] || [];
+  const playerIndexInTeam = playerPosition % teamPlayers.length;
+  
+  // Si hemos completado una ronda completa de todos los jugadores de todos los equipos, reiniciar
+  // Esto ocurre cuando playerPosition >= maxPlayersPerTeam y volvemos al primer equipo
+  if (playerPosition >= maxPlayersPerTeam && teamIndex === 0) {
+    // Reiniciar al primer jugador del primer equipo
+    return {
+      team: teams[0],
+      playerIndexInTeam: 0,
+      globalIndex: 0
+    };
+  }
+
+  return {
+    team: nextTeam,
+    playerIndexInTeam: playerIndexInTeam,
+    globalIndex: nextGlobalIndex
+  };
+};
+
+// Helper para obtener el equipo y jugador actual basándose en el índice global
+const getCurrentTurn = (players, currentPlayerIndex) => {
+  // Organizar jugadores por equipo
+  const playersByTeam = {};
+  players.forEach((player, index) => {
+    const team = player.team;
+    if (!playersByTeam[team]) {
+      playersByTeam[team] = [];
+    }
+    playersByTeam[team].push({ ...player, originalIndex: index });
+  });
+
+  // Obtener todos los equipos y ordenarlos
+  const teams = Object.keys(playersByTeam).map(Number).sort((a, b) => a - b);
+  const totalTeams = teams.length;
+
+  // Calcular qué posición de jugador dentro del equipo (0, 1, 2, ...)
+  const playerPosition = Math.floor(currentPlayerIndex / totalTeams);
+  
+  // Calcular qué equipo debe jugar (alternando)
+  const teamIndex = currentPlayerIndex % totalTeams;
+  const currentTeam = teams[teamIndex];
+  
+  // Obtener el jugador específico de ese equipo en esa posición
+  const teamPlayers = playersByTeam[currentTeam] || [];
+  const playerIndexInTeam = playerPosition % teamPlayers.length;
+
+  return {
+    team: currentTeam,
+    playerIndexInTeam: playerIndexInTeam
+  };
+};
+
+// Helper para actualizar estadísticas cuando termina una partida
+const updatePlayerStats = async (game) => {
+  try {
+    const players = game.players || [];
+    const roundScores = game.roundScores || {
+      round1: { team1: 0, team2: 0 },
+      round2: { team1: 0, team2: 0 },
+      round3: { team1: 0, team2: 0 }
+    };
+
+    // Calcular puntuación total por equipo
+    const team1Score = roundScores.round1.team1 + roundScores.round2.team1 + roundScores.round3.team1;
+    const team2Score = roundScores.round1.team2 + roundScores.round2.team2 + roundScores.round3.team2;
+
+    // Determinar equipo ganador (si hay empate, nadie gana)
+    const winningTeam = team1Score > team2Score ? 1 : (team2Score > team1Score ? 2 : null);
+
+    // Actualizar estadísticas para todos los jugadores
+    for (const player of players) {
+      const userId = player.user;
+      const user = await User.findByPk(userId);
+      
+      if (user) {
+        // Incrementar partidas jugadas
+        await user.update({
+          gamesPlayed: (user.gamesPlayed || 0) + 1
+        });
+
+        // Si el jugador está en el equipo ganador, incrementar partidas ganadas
+        if (winningTeam !== null && player.team === winningTeam) {
+          await user.update({
+            gamesWon: (user.gamesWon || 0) + 1
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error actualizando estadísticas de jugadores:', error);
+    // No lanzar error para no interrumpir el flujo del juego
+  }
+};
+
 // Helper para formatear game con usuarios
 const formatGame = async (game, req = null) => {
-  const host = await User.findByPk(game.hostId, { attributes: ['id', 'username'] });
   const players = game.players || [];
   
-  // Obtener información de usuarios para los players
-  const playersWithUsers = await Promise.all(
-    players.map(async (player) => {
-      const user = await User.findByPk(player.user, { attributes: ['id', 'username'] });
-      return {
-        user: user ? { _id: user.id, username: user.username } : { _id: player.user, username: 'Usuario' },
-        team: player.team,
-        score: player.score
-      };
-    })
-  );
+  // Recopilar todos los IDs de usuarios únicos que necesitamos (host + players)
+  const userIds = new Set();
+  if (game.hostId) userIds.add(game.hostId);
+  players.forEach(player => {
+    if (player.user) userIds.add(player.user);
+  });
+  
+  // Hacer UNA sola consulta para obtener todos los usuarios necesarios
+  const users = await User.findAll({
+    where: { id: Array.from(userIds) },
+    attributes: ['id', 'username', 'avatar']
+  });
+  
+  // Crear un mapa para acceso rápido
+  const usersMap = new Map();
+  users.forEach(user => {
+    usersMap.set(user.id, user);
+  });
+  
+  // Obtener host (ya incluido en la consulta única)
+  const host = usersMap.get(game.hostId);
+  
+  // Obtener información de usuarios para los players (usar el mapa en lugar de consultas)
+  const playersWithUsers = players.map((player) => {
+    const user = usersMap.get(player.user);
+    return {
+      user: user ? { _id: user.id, id: user.id, username: user.username, avatar: user.avatar } : { _id: player.user, id: player.user, username: 'Usuario', avatar: null },
+      team: player.team,
+      score: player.score
+    };
+  });
 
   // Solo devolver los personajes del usuario actual
   const playerCharacters = game.playerCharacters || {};
@@ -48,17 +192,28 @@ const formatGame = async (game, req = null) => {
 
   const usesCategory = game.categoryId != null || game.charactersPerPlayer === 0;
 
+  // Obtener avatar del host (ya está en el objeto host)
+  const hostAvatar = host ? host.avatar : null;
+
+  // Asegurar que playerAvatars siempre sea un objeto
+  const gameData = game.toJSON();
+  const playerAvatarsData = (gameData.playerAvatars && typeof gameData.playerAvatars === 'object') 
+    ? gameData.playerAvatars 
+    : {};
+
   return {
-    ...game.toJSON(),
-    host: host ? { _id: host.id, username: host.username } : null,
+    ...gameData,
+    host: host ? { _id: host.id, username: host.username, avatar: hostAvatar } : null,
     players: playersWithUsers,
     playerCharacters: filteredPlayerCharacters, // Solo los personajes del usuario actual
-    playerStats: game.playerStats || {},
-    roundCharacters: game.roundCharacters || [],
-    blockedCharacters: game.blockedCharacters || [],
-    waitingForPlayer: game.waitingForPlayer || false,
-    showingRoundIntro: game.showingRoundIntro || false,
-    currentPlayerIndex: game.currentPlayerIndex || 0,
+    playerAvatars: playerAvatarsData, // Avatares de todos los jugadores
+    playerStats: gameData.playerStats || {},
+    roundCharacters: gameData.roundCharacters || [],
+    blockedCharacters: gameData.blockedCharacters || [],
+    waitingForPlayer: gameData.waitingForPlayer || false,
+    showingRoundIntro: gameData.showingRoundIntro || false,
+    showingRoundIntroMidTurn: gameData.showingRoundIntroMidTurn || false,
+    currentPlayerIndex: gameData.currentPlayerIndex || 0,
     category: categoryInfo,
     usesCategory: usesCategory
   };
@@ -67,7 +222,7 @@ const formatGame = async (game, req = null) => {
 // Crear nueva partida
 router.post('/create', auth, async (req, res) => {
   try {
-    const { characters, timePerRound, numPlayers, gameMode, charactersPerPlayer, categoryId, maxCharacters } = req.body;
+    const { characters, timePerRound, numPlayers, gameMode, charactersPerPlayer, categoryId, maxCharacters, avatar } = req.body;
 
     // Validar número de jugadores
     if (!numPlayers || numPlayers < 2) {
@@ -76,7 +231,13 @@ router.post('/create', auth, async (req, res) => {
 
     let gameCharacters = [];
     let playerCharacters = {};
+    let playerAvatars = {};
     let useCategory = false;
+
+    // Guardar avatar del host si se proporciona
+    if (avatar) {
+      playerAvatars[req.user.id] = avatar;
+    }
 
     // Si se proporciona categoryId, usar personajes de la categoría
     if (categoryId) {
@@ -182,6 +343,7 @@ router.post('/create', auth, async (req, res) => {
       }],
       characters: gameCharacters,
       playerCharacters: playerCharacters,
+      playerAvatars: playerAvatars,
       numPlayers: numPlayers,
       gameMode: gameMode || 'teams',
       charactersPerPlayer: useCategory ? 0 : (charactersPerPlayer || 2), // 0 significa que usa categoría
@@ -204,7 +366,7 @@ router.post('/create', auth, async (req, res) => {
 // Unirse a partida
 router.post('/join', auth, async (req, res) => {
   try {
-    const { roomCode, characters } = req.body;
+    const { roomCode, characters, avatar } = req.body;
 
     const game = await Game.findOne({ where: { roomCode } });
     
@@ -218,12 +380,25 @@ router.post('/join', auth, async (req, res) => {
 
     const players = game.players || [];
     const playerCharacters = game.playerCharacters || {};
+    const playerAvatars = game.playerAvatars || {};
     const usesCategory = game.categoryId != null || game.charactersPerPlayer === 0;
     
     // Verificar si el usuario ya está en la partida
     const alreadyInGame = players.some(p => p.user === req.user.id);
     
     if (alreadyInGame) {
+      // Guardar avatar si se proporciona (actualizar avatar existente)
+      if (avatar) {
+        playerAvatars[req.user.id] = avatar;
+        await game.update({ playerAvatars });
+        
+        // Emitir evento para notificar actualización de avatar
+        const io = req.app.get('io');
+        if (io) {
+          io.to(roomCode).emit('game-updated');
+        }
+      }
+      
       // Si usa categoría, no necesita aportar personajes
       if (usesCategory) {
         const formattedGame = await formatGame(game, req);
@@ -257,6 +432,12 @@ router.post('/join', auth, async (req, res) => {
           characters: allCharacters,
           playerCharacters: playerCharacters
         });
+        
+        // Emitir evento para notificar actualización de personajes
+        const io = req.app.get('io');
+        if (io) {
+          io.to(roomCode).emit('game-updated');
+        }
       }
       
       const formattedGame = await formatGame(game, req);
@@ -302,11 +483,23 @@ router.post('/join', auth, async (req, res) => {
       allCharacters.push(...trimmedChars);
     }
 
+    // Guardar avatar si se proporciona
+    if (avatar) {
+      playerAvatars[req.user.id] = avatar;
+    }
+
     await game.update({ 
       players,
       characters: allCharacters,
-      playerCharacters: playerCharacters
+      playerCharacters: playerCharacters,
+      playerAvatars: playerAvatars
     });
+
+    // Emitir evento para notificar a todos los jugadores (incluido el anfitrión)
+    const io = req.app.get('io');
+    if (io) {
+      io.to(roomCode).emit('game-updated');
+    }
 
     const formattedGame = await formatGame(game, req);
     res.json({ game: formattedGame });
@@ -430,8 +623,14 @@ router.post('/:roomCode/hit', auth, async (req, res) => {
       return res.status(403).json({ message: 'No estás en esta partida' });
     }
 
-    if (player.team !== game.currentTeam) {
-      return res.status(400).json({ message: 'No es el turno de tu equipo' });
+    // Verificar que es el turno del jugador correcto usando la función helper
+    const currentTurn = getCurrentTurn(players, game.currentPlayerIndex || 0);
+    const currentTeamPlayers = players.filter(p => p.team === currentTurn.team);
+    const expectedPlayer = currentTeamPlayers[currentTurn.playerIndexInTeam];
+    
+    if (player.team !== currentTurn.team || 
+        (expectedPlayer && expectedPlayer.user !== req.user.id)) {
+      return res.status(400).json({ message: 'No es tu turno' });
     }
 
     // Incrementar puntuación del equipo
@@ -468,14 +667,44 @@ router.post('/:roomCode/hit', auth, async (req, res) => {
     let newBlockedCharacters = blockedCharacters;
     let waitingForPlayer = false;
     let showingRoundIntro = false;
+    let showingRoundIntroMidTurn = false;
     const characters = game.characters || [];
+    const timer = game.timer || { timeLeft: game.timePerRound, isPaused: false };
+    
+    // Si el frontend envía el tiempo actual, usarlo (más preciso que el de la BD)
+    const currentTimeLeft = req.body.timeLeft !== undefined ? req.body.timeLeft : timer.timeLeft;
+    
+    let newTimer = { ...timer, timeLeft: currentTimeLeft };
 
     // Verificar si se terminaron los personajes de la ronda
     if (roundCharacters.length === 0) {
       // Pasar a siguiente ronda
       if (game.currentRound < 3) {
         newRound = game.currentRound + 1;
-        newTeam = game.currentTeam === 1 ? 2 : 1; // Alternar quién empieza
+        // Si el juego está en progreso (no pausado), es un cambio de ronda en medio del turno
+        // Preservar el tiempo restante y mostrar intro mid-turn
+        if (!timer.isPaused && currentTimeLeft > 0) {
+          showingRoundIntroMidTurn = true;
+          // Preservar el tiempo actual del timer (usar el tiempo enviado por el frontend si está disponible)
+          newTimer = {
+            timeLeft: currentTimeLeft, // Preservar el tiempo restante (del frontend si está disponible)
+            isPaused: true // Pausar hasta que el jugador continúe
+          };
+          // Mantener el mismo equipo y jugador (no alternar)
+          newTeam = game.currentTeam;
+        } else {
+          // Si estaba pausado o sin tiempo, es un cambio normal de ronda
+          // Usar la función helper para calcular el siguiente turno
+          const nextTurn = getNextTurn(players, game.currentPlayerIndex || 0);
+          newTeam = nextTurn.team;
+          newTimer = {
+            timeLeft: game.timePerRound,
+            isPaused: true // Pausado hasta que el jugador esté listo
+          };
+          showingRoundIntro = true;
+          // Actualizar el índice global del jugador
+          game.currentPlayerIndex = nextTurn.globalIndex;
+        }
         newIndex = 0;
         // Resetear todos los personajes para la nueva ronda
         const shuffled = [...characters];
@@ -486,11 +715,21 @@ router.post('/:roomCode/hit', auth, async (req, res) => {
         newRoundCharacters = shuffled;
         newBlockedCharacters = [];
         waitingForPlayer = true;
-        showingRoundIntro = true;
       } else {
         // Juego terminado
         newStatus = 'finished';
       }
+    } else {
+      // No se terminaron los personajes: solo actualizar los personajes disponibles
+      // El jugador continúa jugando hasta que falle o se le acabe el tiempo
+      // NO cambiar el turno, mantener el mismo equipo y jugador
+      newTeam = game.currentTeam;
+      // No actualizar currentPlayerIndex, mantener el mismo jugador
+      waitingForPlayer = false; // El jugador sigue jugando
+      newBlockedCharacters = blockedCharacters; // Mantener personajes bloqueados del turno actual
+      // Actualizar el índice del personaje para el siguiente personaje disponible
+      const availableChars = newRoundCharacters.filter(c => !newBlockedCharacters.includes(c));
+      newIndex = (game.currentCharacterIndex + 1) % availableChars.length;
     }
 
     await game.update({
@@ -500,14 +739,23 @@ router.post('/:roomCode/hit', auth, async (req, res) => {
       currentCharacterIndex: newIndex,
       currentRound: newRound,
       currentTeam: newTeam,
+      currentPlayerIndex: game.currentPlayerIndex || 0,
       status: newStatus,
       roundCharacters: newRoundCharacters,
       blockedCharacters: newBlockedCharacters,
       waitingForPlayer,
-      showingRoundIntro
+      showingRoundIntro,
+      showingRoundIntroMidTurn,
+      timer: newTimer
     });
 
     await game.reload();
+
+    // Si el juego terminó, actualizar estadísticas de los jugadores
+    if (newStatus === 'finished' && game.status === 'finished') {
+      await updatePlayerStats(game);
+    }
+
     const formattedGame = await formatGame(game, req);
     res.json({ game: formattedGame });
   } catch (error) {
@@ -530,8 +778,14 @@ router.post('/:roomCode/fail', auth, async (req, res) => {
       return res.status(403).json({ message: 'No estás en esta partida' });
     }
 
-    if (player.team !== game.currentTeam) {
-      return res.status(400).json({ message: 'No es el turno de tu equipo' });
+    // Verificar que es el turno del jugador correcto usando la función helper
+    const currentTurn = getCurrentTurn(players, game.currentPlayerIndex || 0);
+    const currentTeamPlayers = players.filter(p => p.team === currentTurn.team);
+    const expectedPlayer = currentTeamPlayers[currentTurn.playerIndexInTeam];
+    
+    if (player.team !== currentTurn.team || 
+        (expectedPlayer && expectedPlayer.user !== req.user.id)) {
+      return res.status(400).json({ message: 'No es tu turno' });
     }
 
     // Actualizar estadísticas del jugador (fallo)
@@ -549,7 +803,7 @@ router.post('/:roomCode/fail', auth, async (req, res) => {
     const failedCharacter = availableChars[currentIndex];
     blockedCharacters.push(failedCharacter);
 
-    // Terminar el turno - cambiar de equipo
+    // Terminar el turno - cambiar al siguiente jugador alternando entre equipos
     let newRound = game.currentRound;
     let newTeam = game.currentTeam;
     let newStatus = game.status;
@@ -559,40 +813,29 @@ router.post('/:roomCode/fail', auth, async (req, res) => {
     let showingRoundIntro = false;
     const characters = game.characters || [];
 
-    if (game.currentTeam === 2) {
-      // Equipo 2 falló, pasar a siguiente ronda
-      if (game.currentRound < 3) {
-        newRound = game.currentRound + 1;
-        newTeam = 1;
-        // Resetear personajes para nueva ronda
-        const shuffled = [...characters];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        newRoundCharacters = shuffled;
-        showingRoundIntro = true;
-      } else {
-        newStatus = 'finished';
-        waitingForPlayer = false;
-      }
-    } else {
-      // Equipo 1 falló, pasar a equipo 2 (mantener personajes no adivinados)
-      newTeam = 2;
-      // Barajear los personajes restantes de la ronda
-      const remaining = [...roundCharacters];
-      for (let i = remaining.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
-      }
-      newRoundCharacters = remaining;
+    // Calcular el siguiente turno usando la función helper
+    const nextTurn = getNextTurn(players, game.currentPlayerIndex || 0);
+    newTeam = nextTurn.team;
+    const newPlayerIndex = nextTurn.globalIndex;
+
+    // El cambio de ronda solo ocurre cuando se terminan todos los personajes (en /hit)
+    // Aquí solo cambiamos de turno, sin importar si se completa un ciclo completo
+    // Si se completa un ciclo completo pero todavía hay personajes, simplemente continuar con el siguiente ciclo
+    
+    // Barajear los personajes restantes de la ronda
+    const remaining = [...roundCharacters];
+    for (let i = remaining.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
     }
+    newRoundCharacters = remaining;
 
     await game.update({
       playerStats,
       currentCharacterIndex: 0,
       currentRound: newRound,
       currentTeam: newTeam,
+      currentPlayerIndex: newPlayerIndex,
       status: newStatus,
       roundCharacters: newRoundCharacters,
       blockedCharacters: newBlockedCharacters,
@@ -605,6 +848,12 @@ router.post('/:roomCode/fail', auth, async (req, res) => {
     });
 
     await game.reload();
+
+    // Si el juego terminó, actualizar estadísticas de los jugadores
+    if (newStatus === 'finished' && game.status === 'finished') {
+      await updatePlayerStats(game);
+    }
+
     const formattedGame = await formatGame(game, req);
     res.json({ game: formattedGame });
   } catch (error) {
@@ -648,9 +897,30 @@ router.post('/:roomCode/round-intro-seen', auth, async (req, res) => {
       return res.status(404).json({ message: 'Partida no encontrada' });
     }
 
-    await game.update({
-      showingRoundIntro: false
-    });
+    const timer = game.timer || { timeLeft: game.timePerRound, isPaused: false };
+    
+    // Si es intro mid-turn, preservar el tiempo y reanudar
+    if (game.showingRoundIntroMidTurn) {
+      await game.update({
+        showingRoundIntroMidTurn: false,
+        waitingForPlayer: false,
+        timer: {
+          timeLeft: timer.timeLeft, // Preservar tiempo restante
+          isPaused: false // Reanudar el juego
+        }
+      });
+    } else {
+      // Intro normal de ronda
+      await game.update({
+        waitingForPlayer: false,
+        showingRoundIntro: false,
+        blockedCharacters: [],
+        timer: {
+          timeLeft: game.timePerRound,
+          isPaused: false
+        }
+      });
+    }
 
     await game.reload();
     const formattedGame = await formatGame(game, req);
@@ -670,8 +940,14 @@ router.post('/:roomCode/timer', auth, async (req, res) => {
       return res.status(404).json({ message: 'Partida no encontrada' });
     }
 
-    const timer = game.timer || { timeLeft: 60, isPaused: false };
-    if (timeLeft !== undefined) timer.timeLeft = timeLeft;
+    const timer = game.timer || { timeLeft: game.timePerRound || 60, isPaused: false };
+    // Preservar el tiempo actual si no se envía uno nuevo
+    if (timeLeft !== undefined) {
+      timer.timeLeft = timeLeft;
+    } else {
+      // Si no se envía timeLeft, mantener el tiempo actual del juego
+      timer.timeLeft = timer.timeLeft || game.timePerRound || 60;
+    }
     if (isPaused !== undefined) timer.isPaused = isPaused;
 
     await game.update({ timer });
@@ -679,6 +955,123 @@ router.post('/:roomCode/timer', auth, async (req, res) => {
 
     const formattedGame = await formatGame(game, req);
     res.json({ game: formattedGame });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Cancelar partida (solo anfitrión)
+router.delete('/:roomCode', auth, async (req, res) => {
+  try {
+    const game = await Game.findOne({ where: { roomCode: req.params.roomCode } });
+
+    if (!game) {
+      return res.status(404).json({ message: 'Partida no encontrada' });
+    }
+
+    const hostId = typeof game.hostId === 'object' ? (game.hostId.id || game.hostId._id) : game.hostId;
+    if (hostId !== req.user.id) {
+      return res.status(403).json({ message: 'Solo el anfitrión puede cancelar la partida' });
+    }
+
+    if (game.status === 'finished') {
+      return res.status(400).json({ message: 'Esta partida ya terminó' });
+    }
+
+    const roomCode = req.params.roomCode;
+    
+    // Emitir evento ANTES de destruir para notificar a los demás jugadores
+    const io = req.app.get('io');
+    if (io) {
+      // Emitir evento específico de cancelación para que el frontend redirija inmediatamente
+      io.to(roomCode).emit('game-cancelled', { roomCode, message: 'La partida ha sido cancelada por el anfitrión' });
+      // También emitir game-updated por compatibilidad
+      io.to(roomCode).emit('game-updated');
+    }
+    
+    await game.destroy();
+    
+    res.json({ message: 'Partida cancelada exitosamente' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Salirse de partida
+router.post('/:roomCode/leave', auth, async (req, res) => {
+  try {
+    const game = await Game.findOne({ where: { roomCode: req.params.roomCode } });
+
+    // Si el juego no existe (fue cancelado por el anfitrión), simplemente retornar éxito
+    // para que los demás jugadores puedan salir sin problemas
+    if (!game) {
+      return res.json({ message: 'Partida no encontrada o ya cancelada' });
+    }
+
+    const hostId = typeof game.hostId === 'object' ? (game.hostId.id || game.hostId._id) : game.hostId;
+    // Si es el anfitrión, permitir salirse pero sugerir cancelar
+    // No bloquear la salida para evitar que quede atrapado
+    if (hostId === req.user.id && game.status === 'waiting') {
+      // Si es anfitrión y está en waiting, sugerir cancelar pero no bloquear
+      // El frontend puede manejar esto mostrando un mensaje apropiado
+    }
+
+    // Permitir salirse incluso si el juego terminó
+    // No bloquear la salida en ningún caso
+
+    const players = game.players || [];
+    const playerIndex = players.findIndex(p => p.user === req.user.id);
+
+    if (playerIndex === -1) {
+      return res.status(400).json({ message: 'No estás en esta partida' });
+    }
+
+    // Remover jugador
+    players.splice(playerIndex, 1);
+
+    // Remover personajes del jugador si existen
+    const playerCharacters = game.playerCharacters || {};
+    const playerAvatars = game.playerAvatars || {};
+    const allCharacters = game.characters || [];
+
+    if (playerCharacters[req.user.id]) {
+      // Remover personajes del pool
+      const userCharacters = playerCharacters[req.user.id];
+      userCharacters.forEach(char => {
+        const charIndex = allCharacters.indexOf(char);
+        if (charIndex > -1) {
+          allCharacters.splice(charIndex, 1);
+        }
+      });
+      delete playerCharacters[req.user.id];
+    }
+
+    // Remover avatar del jugador
+    if (playerAvatars[req.user.id]) {
+      delete playerAvatars[req.user.id];
+    }
+
+    // Remover estadísticas del jugador
+    const playerStats = game.playerStats || {};
+    if (playerStats[req.user.id]) {
+      delete playerStats[req.user.id];
+    }
+
+    await game.update({
+      players,
+      characters: allCharacters,
+      playerCharacters,
+      playerAvatars,
+      playerStats
+    });
+
+    // Emitir evento para notificar a los demás jugadores
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.params.roomCode).emit('game-updated');
+    }
+
+    res.json({ message: 'Te has salido de la partida exitosamente' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

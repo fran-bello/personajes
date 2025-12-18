@@ -138,8 +138,8 @@
 }
 
 .error-message {
-  background: #fee;
-  color: #c33;
+  background: rgba(255, 85, 85, 0.2);
+  color: #ff5555;
   padding: 12px;
   border-radius: 8px;
   margin-bottom: 20px;

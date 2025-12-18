@@ -159,7 +159,7 @@ function Characters() {
       <div style={headerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '28px' }}>👤</span>
-          <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0 }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0, textTransform: 'uppercase' }}>
             Mis Personajes
           </h1>
         </div>
@@ -221,7 +221,16 @@ function Characters() {
       {/* List */}
       {characters.length === 0 ? (
         <Card style={emptyCardStyle}>
-          <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎭</div>
+          <img 
+            src="/img/logo-personajes.png" 
+            alt="Personajes" 
+            style={{ 
+              maxWidth: '120px', 
+              maxHeight: '120px', 
+              marginBottom: '16px',
+              objectFit: 'contain'
+            }} 
+          />
           <h3 style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold', marginBottom: '8px' }}>
             Sin personajes
           </h3>

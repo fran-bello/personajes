@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
-import { Button, Input, Card } from './index';
+import { Button, Input, Card, Toast } from './index';
+import AvatarSelector, { AVATARS } from './AvatarSelector';
 import { colors } from '../theme';
+import './CreateGame.css';
 
 function CreateGame() {
-  const [mode, setMode] = useState('create'); // 'create' | 'join'
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialMode = searchParams.get('mode') === 'join' ? 'join' : 'create';
+  const [mode, setMode] = useState(initialMode); // 'create' | 'join'
   const [numPlayers, setNumPlayers] = useState('4');
   const [gameMode, setGameMode] = useState('teams');
   const [charactersPerPlayer, setCharactersPerPlayer] = useState('2');
@@ -14,6 +19,7 @@ function CreateGame() {
   const [roomCode, setRoomCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0]);
   
   // Estado para categorías
   const [useCategory, setUseCategory] = useState(false);
@@ -115,6 +121,7 @@ function CreateGame() {
         timePerRound: parseInt(timePerRound) || 60,
         numPlayers: parseInt(numPlayers) || 4,
         gameMode,
+        avatar: selectedAvatar,
       };
 
       if (useCategory && selectedCategory) {
@@ -143,11 +150,16 @@ function CreateGame() {
       return;
     }
 
+    if (!selectedAvatar) {
+      setError('Selecciona un avatar');
+      return;
+    }
+
     setError('');
     setLoading(true);
 
     try {
-      await api.joinGame(roomCode.trim().toUpperCase());
+      await api.joinGame(roomCode.trim().toUpperCase(), null, selectedAvatar);
       navigate(`/game/${roomCode.trim().toUpperCase()}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Error al unirse a la partida');
@@ -199,11 +211,11 @@ function CreateGame() {
       <div style={headerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '28px' }}>🎮</span>
-          <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0 }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0, textTransform: 'uppercase' }}>
             Partida Online
           </h1>
         </div>
-        <Button title="Volver" onClick={() => navigate(-1)} variant="secondary" size="small" />
+        <Button title="Volver" onClick={() => navigate('/dashboard')} variant="secondary" size="small" />
       </div>
 
       {/* Mode Tabs */}
@@ -222,25 +234,17 @@ function CreateGame() {
         </div>
       </div>
 
-      {/* Error */}
-      {error && (
-        <div
-          style={{
-            backgroundColor: `${colors.danger}20`,
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '16px',
-            color: colors.danger,
-            textAlign: 'center',
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {/* Toast Notification */}
+      <Toast
+        message={error}
+        type="error"
+        isVisible={!!error}
+        onClose={() => setError('')}
+      />
 
       {mode === 'create' ? (
         <Card>
-          <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: colors.text, marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: colors.text, marginBottom: '16px', textTransform: 'uppercase' }}>
             Configurar Partida
           </h2>
 
@@ -320,36 +324,19 @@ function CreateGame() {
                   <Button title="Limpiar búsqueda" onClick={() => setCategorySearch('')} variant="outline" size="small" />
                 </div>
               ) : (
-                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', marginBottom: '12px', paddingBottom: '8px' }}>
+                <div className="categories-grid">
                   {filteredCategories.map((cat) => (
                     <div
                       key={cat.id}
-                      style={{
-                        backgroundColor: selectedCategory?.id === cat.id ? `${colors.primary}15` : colors.surfaceLight,
-                        borderRadius: '12px',
-                        padding: '12px',
-                        minWidth: '100px',
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        border: `2px solid ${selectedCategory?.id === cat.id ? colors.primary : 'transparent'}`,
-                        transition: 'all 0.2s',
-                      }}
+                      className={`category-card ${selectedCategory?.id === cat.id ? 'selected' : ''}`}
                       onClick={() => {
                         setSelectedCategory(cat);
                         setMaxCharacters('');
                       }}
                     >
-                      <div style={{ fontSize: '28px', marginBottom: '4px' }}>{cat.icon}</div>
-                      <div style={{
-                        color: selectedCategory?.id === cat.id ? colors.primary : colors.text,
-                        fontSize: '12px',
-                        fontWeight: '600',
-                      }}>
-                        {cat.name}
-                      </div>
-                      <div style={{ color: colors.textMuted, fontSize: '10px', marginTop: '2px' }}>
-                        {cat.characterCount} pers.
-                      </div>
+                      <div className="category-icon">{cat.icon}</div>
+                      <div className="category-name">{cat.name}</div>
+                      <div className="category-count">{cat.characterCount} pers.</div>
                     </div>
                   ))}
                 </div>
@@ -463,6 +450,13 @@ function CreateGame() {
             placeholder="60"
           />
 
+          <div style={{ marginTop: '24px', marginBottom: '16px' }}>
+            <AvatarSelector
+              selectedAvatar={selectedAvatar}
+              onSelect={setSelectedAvatar}
+            />
+          </div>
+
           {!useCategory && (
             <>
               <h3 style={{ color: colors.text, fontWeight: 'bold', marginBottom: '12px', marginTop: '8px' }}>
@@ -492,7 +486,7 @@ function CreateGame() {
         </Card>
       ) : (
         <Card>
-          <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: colors.text, marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: colors.text, marginBottom: '16px', textTransform: 'uppercase' }}>
             Unirse a Partida
           </h2>
 
@@ -502,6 +496,13 @@ function CreateGame() {
             onChange={(val) => setRoomCode(val.toUpperCase())}
             placeholder="ABCD12"
           />
+
+          <div style={{ marginTop: '24px', marginBottom: '24px' }}>
+            <AvatarSelector
+              selectedAvatar={selectedAvatar}
+              onSelect={setSelectedAvatar}
+            />
+          </div>
 
           <Button
             title={loading ? 'Uniéndose...' : 'Unirse'}

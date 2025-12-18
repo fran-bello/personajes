@@ -27,9 +27,9 @@ const connectDB = async () => {
     // Importar modelos para que se registren con Sequelize (incluye relaciones)
     require('../models/index');
     
-    // Sincronizar modelos (crear tablas si no existen)
+    // Sincronizar modelos (crear tablas si no existen, sin alterar existentes)
     if (process.env.NODE_ENV !== 'production') {
-      await sequelize.sync({ alter: true });
+      await sequelize.sync({ alter: false });
       console.log('Modelos sincronizados.');
     }
   } catch (error) {

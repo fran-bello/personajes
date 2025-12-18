@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Button, Input, Card } from './index';
+import { Button, Input, Card, Toast } from './index';
 import { colors } from '../theme';
 
 function Register() {
@@ -66,8 +66,12 @@ function Register() {
   };
 
   const logoStyle = {
-    fontSize: '48px',
+    width: '80px',
+    height: 'auto',
     marginBottom: '8px',
+    display: 'block',
+    marginLeft: 'auto',
+    marginRight: 'auto',
   };
 
   const titleStyle = {
@@ -75,6 +79,8 @@ function Register() {
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: '8px',
+    textTransform: 'uppercase',
+    textShadow: '3px 3px 6px rgba(102, 0, 102, 1), 2px 2px 4px rgba(0, 0, 0, 1), 1px 1px 2px rgba(0, 0, 0, 0.9)',
   };
 
   const subtitleStyle = {
@@ -90,7 +96,7 @@ function Register() {
   };
 
   const linkTextStyle = {
-    color: colors.primary,
+    color: '#00d4ff',
     textDecoration: 'none',
     fontWeight: '500',
   };
@@ -99,27 +105,19 @@ function Register() {
     <div style={containerStyle}>
       <Card style={cardStyle}>
         <div style={headerStyle}>
-          <div style={logoStyle}>🎭</div>
+          <img src="/img/logo-personajes.png" alt="Personajes" style={logoStyle} />
           <h1 style={titleStyle}>Crear Cuenta</h1>
           <p style={subtitleStyle}>Únete para jugar con tus amigos</p>
         </div>
 
-        <form onSubmit={handleRegister}>
-          {error && (
-            <div
-              style={{
-                backgroundColor: `${colors.danger}20`,
-                color: colors.danger,
-                padding: '12px',
-                borderRadius: '8px',
-                marginBottom: '16px',
-                fontSize: '14px',
-              }}
-            >
-              {error}
-            </div>
-          )}
+        <Toast
+          message={error}
+          type="error"
+          isVisible={!!error}
+          onClose={() => setError('')}
+        />
 
+        <form onSubmit={handleRegister}>
           <Input
             label="Nombre de usuario"
             value={username}

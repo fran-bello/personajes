@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 
 const AuthContext = createContext()
@@ -15,43 +15,8 @@ export function AuthProvider({ children }) {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
-  useEffect(() => {
-    checkAuth()
-  }, [])
-
-  const checkAuth = async () => {
-    try {
-      // Cargar preferencias guardadas
-      const savedRememberMe = localStorage.getItem('rememberMe')
-      const savedEmailValue = localStorage.getItem('savedEmail')
-      const token = localStorage.getItem('token')
-
-      // Establecer preferencia de "recuérdame" (default: true)
-      const rememberMeValue = savedRememberMe !== 'false'
-      setRememberMe(rememberMeValue)
-      
-      // Establecer email guardado
-      if (savedEmailValue) {
-        setSavedEmail(savedEmailValue)
-      }
-
-      // Si hay token y "recuérdame" estaba activo, intentar restaurar sesión
-      if (token && rememberMeValue) {
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-        await fetchUser()
-      } else if (token && !rememberMeValue) {
-        // Si hay token pero "recuérdame" no estaba activo, limpiarlo
-        localStorage.removeItem('token')
-        delete axios.defaults.headers.common['Authorization']
-      }
-    } catch (error) {
-      console.error('Error checking auth:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchUser = async () => {
+  // Definir fetchUser con useCallback para que sea estable
+  const fetchUser = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/auth/me`)
       setUser(response.data.user)
@@ -62,7 +27,46 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [API_URL])
+
+  // checkAuth solo se ejecuta una vez al montar el provider
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        // Cargar preferencias guardadas
+        const savedRememberMe = localStorage.getItem('rememberMe')
+        const savedEmailValue = localStorage.getItem('savedEmail')
+        const token = localStorage.getItem('token')
+
+        // Establecer preferencia de "recuérdame" (default: true)
+        const rememberMeValue = savedRememberMe !== 'false'
+        setRememberMe(rememberMeValue)
+        
+        // Establecer email guardado
+        if (savedEmailValue) {
+          setSavedEmail(savedEmailValue)
+        }
+
+        // Si hay token y "recuérdame" estaba activo, intentar restaurar sesión
+        if (token && rememberMeValue) {
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+          await fetchUser()
+        } else if (token && !rememberMeValue) {
+          // Si hay token pero "recuérdame" no estaba activo, limpiarlo
+          localStorage.removeItem('token')
+          delete axios.defaults.headers.common['Authorization']
+        } else {
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error)
+        setLoading(false)
+      }
+    }
+
+    checkAuth()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Solo ejecutar una vez al montar
 
   const login = async (email, password, shouldRemember = true) => {
     try {

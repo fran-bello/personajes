@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Button, Input, Card } from './index';
-import { colors } from '../theme';
+import { Button, Input, Card, Toast } from './index';
+import './Login.css';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -37,88 +37,23 @@ function Login() {
     setLoading(false);
   };
 
-  const containerStyle = {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '20px',
-    backgroundColor: 'transparent',
-  };
-
-  const cardStyle = {
-    width: '100%',
-    maxWidth: '400px',
-  };
-
-  const headerStyle = {
-    textAlign: 'center',
-    marginBottom: '32px',
-  };
-
-  const logoStyle = {
-    fontSize: '48px',
-    marginBottom: '8px',
-  };
-
-  const titleStyle = {
-    fontSize: '32px',
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: '8px',
-  };
-
-  const subtitleStyle = {
-    fontSize: '16px',
-    color: colors.textMuted,
-  };
-
-  const rememberMeStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginBottom: '24px',
-    cursor: 'pointer',
-  };
-
-  const linkStyle = {
-    textAlign: 'center',
-    marginTop: '24px',
-    color: colors.textMuted,
-    fontSize: '14px',
-  };
-
-  const linkTextStyle = {
-    color: colors.primary,
-    textDecoration: 'none',
-    fontWeight: '500',
-  };
-
   return (
-    <div style={containerStyle}>
-      <Card style={cardStyle}>
-        <div style={headerStyle}>
-          <div style={logoStyle}>🎭</div>
-          <h1 style={titleStyle}>Personajes</h1>
-          <p style={subtitleStyle}>Inicia sesión para jugar</p>
+    <div className="login-container">
+      <Card className="login-card">
+        <div className="login-header">
+          <img src="/img/logo-personajes.png" alt="Personajes" className="login-logo" />
+          <h1 className="login-title">Personajes</h1>
+          <p className="login-subtitle">Inicia sesión para jugar</p>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          {error && (
-            <div
-              style={{
-                backgroundColor: `${colors.danger}20`,
-                color: colors.danger,
-                padding: '12px',
-                borderRadius: '8px',
-                marginBottom: '16px',
-                fontSize: '14px',
-              }}
-            >
-              {error}
-            </div>
-          )}
+        <Toast
+          message={error}
+          type="error"
+          isVisible={!!error}
+          onClose={() => setError('')}
+        />
 
+        <form onSubmit={handleSubmit}>
           <Input
             label="Email"
             type="email"
@@ -138,21 +73,15 @@ function Login() {
           />
 
           <div
-            style={rememberMeStyle}
+            className="login-remember"
             onClick={() => setRememberMeChecked(!rememberMeChecked)}
           >
             <input
               type="checkbox"
               checked={rememberMeChecked}
               onChange={(e) => setRememberMeChecked(e.target.checked)}
-              style={{
-                width: '18px',
-                height: '18px',
-                cursor: 'pointer',
-                accentColor: colors.primary,
-              }}
             />
-            <label style={{ color: colors.textSecondary, fontSize: '14px', cursor: 'pointer' }}>
+            <label>
               Recordarme
             </label>
           </div>
@@ -164,13 +93,13 @@ function Login() {
             size="large"
             loading={loading}
             disabled={loading}
-            style={{ width: '100%' }}
+            className="login-button"
           />
         </form>
 
-        <p style={linkStyle}>
+        <p className="login-link">
           ¿No tienes cuenta?{' '}
-          <Link to="/register" style={linkTextStyle}>
+          <Link to="/register">
             Regístrate aquí
           </Link>
         </p>

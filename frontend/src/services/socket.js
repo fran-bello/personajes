@@ -57,6 +57,17 @@ class SocketService {
     this.listeners.set('game-updated', handler);
   }
 
+  onGameCancelled(callback) {
+    if (!this.socket) return;
+
+    const handler = (data) => {
+      callback(data);
+    };
+
+    this.socket.on('game-cancelled', handler);
+    this.listeners.set('game-cancelled', handler);
+  }
+
   emitGameUpdate(roomCode) {
     if (this.socket) {
       this.socket.emit('game-update', roomCode);
