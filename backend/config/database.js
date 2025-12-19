@@ -15,7 +15,13 @@ const sequelize = new Sequelize(
       min: 0,
       acquire: 30000,
       idle: 10000
-    }
+    },
+    // Configuración SSL para servicios como PlanetScale
+    dialectOptions: process.env.DB_SSL === 'true' ? {
+      ssl: {
+        rejectUnauthorized: false
+      }
+    } : {}
   }
 );
 

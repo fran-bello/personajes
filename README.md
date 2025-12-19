@@ -238,6 +238,26 @@ npm run dev
 
 ## Producción
 
+### Deployment Gratuito
+
+Para deployar tu aplicación completamente gratis, consulta la guía completa:
+
+- **[🚀 DEPLOY_GRATIS.md](./DEPLOY_GRATIS.md)** - Guía detallada paso a paso
+- **[⚡ INICIO_RAPIDO_DEPLOY.md](./INICIO_RAPIDO_DEPLOY.md)** - Resumen rápido
+
+**Stack recomendado (100% gratis):**
+- **Backend**: [Render.com](https://render.com)
+- **MySQL**: [PlanetScale](https://planetscale.com)
+- **Frontend Web**: [Vercel](https://vercel.com)
+- **App Móvil**: Expo EAS Build
+
+**Verificar configuración antes de deployar:**
+```bash
+node check-deployment.js
+```
+
+### Producción Local
+
 ### Backend
 ```bash
 cd backend
