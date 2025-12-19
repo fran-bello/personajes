@@ -29,6 +29,6 @@ Thumbs.db
 *.swo
 *~
 
-# MongoDB
-data/
+# MongoDB (solo en raíz, no en frontend/src/data/)
+/data/
 
