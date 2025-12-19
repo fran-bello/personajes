@@ -79,6 +79,8 @@ function LocalGame() {
   const [editPlayerCharacters, setEditPlayerCharacters] = useState([]);
   const cardScaleRef = useRef(1);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [cardAnimation, setCardAnimation] = useState('');
+  const [buttonAnimation, setButtonAnimation] = useState({ hit: false, fail: false });
 
   // Validar que solo se ingresen números enteros
   const handleNumericInput = (value, setter) => {
@@ -511,25 +513,45 @@ function LocalGame() {
     const currentPlayer = getCurrentPlayer();
     if (!currentPlayer) return;
     
-    const roundKey = `round${round}`;
-    const teamKey = `team${currentPlayer.team}`;
-    setScores((prev) => ({
-      ...prev,
-      [roundKey]: {
-        ...prev[roundKey],
-        [teamKey]: (prev[roundKey][teamKey] || 0) + 1,
-      },
-    }));
+    // Animación del botón
+    setButtonAnimation(prev => ({ ...prev, hit: true }));
+    setTimeout(() => setButtonAnimation(prev => ({ ...prev, hit: false })), 300);
     
-    setPlayerStats((prev) => ({
-      ...prev,
-      [currentPlayer.id]: {
-        hits: (prev[currentPlayer.id]?.hits || 0) + 1,
-        fails: prev[currentPlayer.id]?.fails || 0,
-      },
-    }));
+    // Animación de la tarjeta (slide out)
+    setCardAnimation('slide-out-right');
     
-    advanceAfterHit();
+    // Después de la animación, cambiar el personaje y hacer slide in
+    setTimeout(() => {
+      const roundKey = `round${round}`;
+      const teamKey = `team${currentPlayer.team}`;
+      setScores((prev) => ({
+        ...prev,
+        [roundKey]: {
+          ...prev[roundKey],
+          [teamKey]: (prev[roundKey][teamKey] || 0) + 1,
+        },
+      }));
+      
+      setPlayerStats((prev) => ({
+        ...prev,
+        [currentPlayer.id]: {
+          hits: (prev[currentPlayer.id]?.hits || 0) + 1,
+          fails: prev[currentPlayer.id]?.fails || 0,
+        },
+      }));
+      
+      advanceAfterHit();
+      
+      // Limpiar animación anterior y aplicar slide in para la nueva tarjeta
+      setCardAnimation('');
+      // Usar requestAnimationFrame para asegurar que el DOM se actualice antes de la animación
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          setCardAnimation('slide-in-left');
+          setTimeout(() => setCardAnimation(''), 400);
+        }, 10);
+      });
+    }, 400);
   };
 
   const handlePlayerReady = () => {
@@ -540,6 +562,10 @@ function LocalGame() {
   };
 
   const handleFail = () => {
+    // Animación del botón
+    setButtonAnimation(prev => ({ ...prev, fail: true }));
+    setTimeout(() => setButtonAnimation(prev => ({ ...prev, fail: false })), 300);
+    
     const currentPlayer = getCurrentPlayer();
     
     if (currentPlayer) {
@@ -1419,7 +1445,7 @@ function LocalGame() {
           </div>
         </div>
 
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '32px' }}>
           <Button
             title="¡Continuar!"
             onClick={() => {
@@ -1624,7 +1650,7 @@ function LocalGame() {
         <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '0 24px' }}>
           <div style={{ width: '100%' }}>
             <div
-              className="character-game-card"
+              className={`character-game-card ${cardAnimation}`}
               onMouseDown={() => setIsCardPressed(true)}
               onMouseUp={() => setIsCardPressed(false)}
               onMouseLeave={() => setIsCardPressed(false)}
@@ -1683,7 +1709,7 @@ function LocalGame() {
           <div style={{ display: 'flex', gap: '16px', marginBottom: '12px' }}>
             <button
               onClick={handleFail}
-              className="action-button fail-button"
+              className={`action-button fail-button ${buttonAnimation.fail ? 'animate-pulse' : ''}`}
             >
               <div className="action-icon">✗</div>
               <div className="action-label">FALLO</div>
@@ -1691,7 +1717,7 @@ function LocalGame() {
             
             <button
               onClick={handleHit}
-              className="action-button success-button"
+              className={`action-button success-button ${buttonAnimation.hit ? 'animate-pulse' : ''}`}
             >
               <div className="action-icon">✓</div>
               <div className="action-label">ACIERTO</div>

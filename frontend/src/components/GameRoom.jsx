@@ -27,6 +27,8 @@ function GameRoom() {
   const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0]);
   const [submittingAvatar, setSubmittingAvatar] = useState(false);
   const timeUpHandledRef = useRef(false);
+  const [cardAnimation, setCardAnimation] = useState('');
+  const [buttonAnimation, setButtonAnimation] = useState({ hit: false, fail: false });
 
   const roundRules = {
     1: 'Puedes decir todas las palabras excepto las del personaje',
@@ -412,22 +414,47 @@ function GameRoom() {
 
   const handleHit = async () => {
     setIsCardPressed(false);
-    animateCard();
-    try {
-      // Enviar el tiempo actual al backend para que lo preserve correctamente
-      const currentTime = getCurrentTimeLeft();
-      const response = await api.hitCharacter(roomCode, currentTime);
-      setGame(response.game);
-      socketService.emitGameUpdate(roomCode);
-    } catch (err) {
-      console.error('[handleHit] Error:', err);
-      setError(err.response?.data?.message || 'Error');
-    }
+    
+    // Animación del botón
+    setButtonAnimation(prev => ({ ...prev, hit: true }));
+    setTimeout(() => setButtonAnimation(prev => ({ ...prev, hit: false })), 300);
+    
+    // Animación de la tarjeta (slide out)
+    setCardAnimation('slide-out-right');
+    
+    // Después de la animación, actualizar el juego
+    setTimeout(async () => {
+      try {
+        // Enviar el tiempo actual al backend para que lo preserve correctamente
+        const currentTime = getCurrentTimeLeft();
+        const response = await api.hitCharacter(roomCode, currentTime);
+        setGame(response.game);
+        socketService.emitGameUpdate(roomCode);
+        
+        // Limpiar animación anterior y aplicar slide in para la nueva tarjeta
+        setCardAnimation('');
+        // Usar requestAnimationFrame para asegurar que el DOM se actualice antes de la animación
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            setCardAnimation('slide-in-left');
+            setTimeout(() => setCardAnimation(''), 400);
+          }, 10);
+        });
+      } catch (err) {
+        console.error('[handleHit] Error:', err);
+        setError(err.response?.data?.message || 'Error');
+        setCardAnimation(''); // Resetear animación en caso de error
+      }
+    }, 400);
   };
 
   const handleFail = async () => {
     setIsCardPressed(false);
-    animateCard();
+    
+    // Animación del botón
+    setButtonAnimation(prev => ({ ...prev, fail: true }));
+    setTimeout(() => setButtonAnimation(prev => ({ ...prev, fail: false })), 300);
+    
     try {
       const response = await api.failCharacter(roomCode);
       setGame(response.game);
@@ -710,7 +737,7 @@ function GameRoom() {
           )}
         </div>
 
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '32px' }}>
           {canConfirm ? (
             <>
               <Button
@@ -1299,7 +1326,7 @@ function GameRoom() {
           {/* Tarjeta del personaje */}
           {isCurrentTeam ? (
             <div
-              className="character-game-card"
+              className={`character-game-card ${cardAnimation}`}
               onMouseDown={() => setIsCardPressed(true)}
               onMouseUp={() => setIsCardPressed(false)}
               onMouseLeave={() => setIsCardPressed(false)}
@@ -1347,14 +1374,14 @@ function GameRoom() {
             <div style={{ display: 'flex', gap: '16px', marginBottom: '12px' }}>
               <button
                 onClick={handleFail}
-                className="action-button fail-button"
+                className={`action-button fail-button ${buttonAnimation.fail ? 'animate-pulse' : ''}`}
               >
                 <div className="action-icon">✗</div>
                 <div className="action-label">FALLO</div>
               </button>
               <button
                 onClick={handleHit}
-                className="action-button success-button"
+                className={`action-button success-button ${buttonAnimation.hit ? 'animate-pulse' : ''}`}
               >
                 <div className="action-icon">✓</div>
                 <div className="action-label">ACIERTO</div>
