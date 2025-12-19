@@ -2,9 +2,10 @@ const { Sequelize } = require('sequelize');
 
 // Configuración de la base de datos
 // Soporta tanto variables DB_* como TIDB_* (compatible con documentación oficial de TiDB)
+// También soporta variantes: DB_DATABASE/DB_NAME, DB_USERNAME/DB_USER
 const sequelize = new Sequelize(
-  process.env.TIDB_DATABASE || process.env.DB_NAME || 'personajes',
-  process.env.TIDB_USER || process.env.DB_USER || 'root',
+  process.env.TIDB_DATABASE || process.env.DB_DATABASE || process.env.DB_NAME || 'personajes',
+  process.env.TIDB_USER || process.env.DB_USERNAME || process.env.DB_USER || 'root',
   process.env.TIDB_PASSWORD || process.env.DB_PASSWORD || '',
   {
     host: process.env.TIDB_HOST || process.env.DB_HOST || 'localhost',
