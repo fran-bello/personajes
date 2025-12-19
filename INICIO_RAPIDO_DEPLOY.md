@@ -3,17 +3,21 @@
 ## 🎯 Stack Gratuito Recomendado
 
 - **Backend**: [Render.com](https://render.com) - Node.js hosting gratis
-- **MySQL**: [PlanetScale](https://planetscale.com) - Base de datos MySQL gratis (5 GB)
+- **MySQL**: [TiDB Cloud](https://tidbcloud.com) - Base de datos MySQL-compatible (completamente gratis, 5 GB)
 - **Frontend Web**: [Vercel](https://vercel.com) - React hosting gratis
 - **App Móvil**: Expo EAS Build - Gratis para Android
 
 ## 📋 Checklist Rápido
 
 ### 1. Base de Datos (5 min)
-- [ ] Crear cuenta en [PlanetScale](https://planetscale.com)
-- [ ] Crear base de datos `personajes`
-- [ ] Copiar credenciales de conexión
-- [ ] Ejecutar SQL de creación de tablas y seeds
+- [ ] Crear cuenta en [TiDB Cloud](https://tidbcloud.com) → Sign Up (puedes usar GitHub)
+- [ ] Crear Cluster → Seleccionar **"Serverless"** (gratis)
+- [ ] Configurar nombre y región del cluster
+- [ ] Copiar credenciales de conexión desde la pestaña "Connect":
+  - Host, Puerto (4000), Usuario, Contraseña, Nombre BD
+- [ ] Ejecutar SQL en este orden:
+  1. Primero: `backend/create_tables.sql` (crea las tablas)
+  2. Segundo: `backend/seeds/categories_seed.sql` (pobla los datos)
 
 ### 2. Backend (10 min)
 - [ ] Crear cuenta en [Render.com](https://render.com)
@@ -41,18 +45,26 @@
 ## 🔑 Variables de Entorno
 
 ### Backend (Render.com)
+
+**Configuración para TiDB Cloud:**
 ```
 PORT=10000
 NODE_ENV=production
-DB_HOST=xxxxx.us-east-2.psdb.cloud
-DB_PORT=3306
+DB_HOST=gateway01.us-west-2.prod.aws.tidbcloud.com
+DB_PORT=4000
 DB_NAME=personajes
-DB_USER=tu-usuario
-DB_PASSWORD=tu-contraseña
+DB_USER=tu-usuario-de-tidb
+DB_PASSWORD=tu-contraseña-de-tidb
 DB_SSL=true
 JWT_SECRET=genera-uno-seguro
 FRONTEND_URL=https://tu-app.vercel.app
 ```
+
+**⚠️ IMPORTANTE:**
+- `DB_PORT` debe ser `4000` (NO 3306)
+- `DB_SSL` debe ser `true` (OBLIGATORIO para TiDB Cloud)
+- Reemplaza los valores con tus credenciales reales de TiDB Cloud
+- **Nota**: También puedes usar variables `TIDB_*` (ver `backend/TIDB_CONNECTION.md`)
 
 ### Frontend (Vercel)
 ```
@@ -83,11 +95,14 @@ node check-deployment.js
 
 **CORS errors**: Verifica que `FRONTEND_URL` en Render apunta a tu URL de Vercel.
 
-**MySQL no conecta**: Verifica que `DB_SSL=true` está configurado.
+**MySQL no conecta**: 
+- Verifica que `DB_SSL=true` y puerto `4000` (NO 3306)
+- Verifica que las credenciales son exactamente las de TiDB Cloud
+- Verifica que el cluster en TiDB Cloud esté activo
 
 ## 💡 Tips
 
-1. **Empieza con PlanetScale** → Luego Render → Luego Vercel
+1. **Empieza con TiDB Cloud** → Luego Render → Luego Vercel
 2. **Copia las URLs** de cada servicio antes de continuar
 3. **Prueba cada paso** antes de pasar al siguiente
 4. **Revisa los logs** si algo falla

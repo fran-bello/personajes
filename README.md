@@ -247,7 +247,7 @@ Para deployar tu aplicación completamente gratis, consulta la guía completa:
 
 **Stack recomendado (100% gratis):**
 - **Backend**: [Render.com](https://render.com)
-- **MySQL**: [PlanetScale](https://planetscale.com)
+- **MySQL**: [TiDB Cloud](https://tidbcloud.com) (completamente gratis, 5 GB, sin límite de tiempo)
 - **Frontend Web**: [Vercel](https://vercel.com)
 - **App Móvil**: Expo EAS Build
 

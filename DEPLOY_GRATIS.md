@@ -7,9 +7,11 @@ Esta guía te ayudará a deployar tu aplicación **Personajes** completamente gr
 | Componente | Servicio | URL | Costo |
 |------------|----------|-----|-------|
 | **Backend** | Render.com | https://render.com | ✅ Gratis |
-| **MySQL** | PlanetScale | https://planetscale.com | ✅ Gratis |
+| **MySQL** | TiDB Cloud | https://tidbcloud.com | ✅ Gratis |
 | **Frontend Web** | Vercel | https://vercel.com | ✅ Gratis |
 | **App Móvil** | Expo EAS | Incluido con Expo | ✅ Gratis (Android) |
+
+**Nota**: TiDB Cloud Serverless es completamente gratis con 5 GB por base de datos, sin límite de tiempo.
 
 ---
 
@@ -36,51 +38,87 @@ git push origin main
 
 ---
 
-## 🗄️ Paso 2: Configurar Base de Datos MySQL (PlanetScale)
+## 🗄️ Paso 2: Configurar Base de Datos MySQL (TiDB Cloud) ⭐
 
-### 2.1 Crear cuenta en PlanetScale
+TiDB Cloud Serverless es completamente gratis y compatible con MySQL. Ofrece 5 GB por base de datos sin límite de tiempo.
 
-1. Ve a [planetscale.com](https://planetscale.com)
-2. Haz clic en **"Sign up"** (puedes usar GitHub)
-3. Verifica tu email
+#### 2.1 Crear cuenta en TiDB Cloud
 
-### 2.2 Crear Base de Datos
+1. Ve a [tidbcloud.com](https://tidbcloud.com)
+2. Haz clic en **"Sign Up"** o **"Get Started"** (puedes usar GitHub)
+3. Verifica tu email si es necesario
+4. **No requiere tarjeta de crédito** ✅
 
-1. En el dashboard, haz clic en **"Create database"**
-2. Configuración:
-   - **Name**: `personajes`
-   - **Region**: Elige la más cercana (ej: `us-east`)
-   - **Plan**: `Hobby` (gratis)
-3. Haz clic en **"Create database"**
+#### 2.2 Crear Cluster Serverless
 
-### 2.3 Obtener Credenciales de Conexión
+1. Una vez en el dashboard, haz clic en **"Create Cluster"** o **"New Cluster"**
+2. Selecciona **"Serverless"** (plan gratuito)
+3. Configuración:
+   - **Cluster Name**: `personajes` (o el nombre que prefieras)
+   - **Region**: Elige la más cercana a ti (ej: `us-west-2`, `us-east-1`, etc.)
+   - **Project**: Puedes crear uno nuevo o usar el default
+4. Haz clic en **"Create"** o **"Create Cluster"**
+5. Espera a que se cree el cluster (1-2 minutos)
 
-1. Una vez creada la BD, haz clic en **"Connect"**
-2. Selecciona **"Node.js"** como lenguaje
-3. Copia las credenciales (las necesitarás después):
-   - `DB_HOST`: algo como `xxxxx.us-east-2.psdb.cloud`
-   - `DB_USER`: tu usuario
-   - `DB_PASSWORD`: tu contraseña
-   - `DB_NAME`: `personajes`
-   - **Nota**: PlanetScale requiere SSL, ya está configurado en el código
+#### 2.3 Obtener Credenciales de Conexión
 
-### 2.4 Ejecutar Migraciones y Seeds
+1. Una vez creado el cluster, haz clic en él para abrirlo
+2. Ve a la pestaña **"Connect"** o busca el botón **"Connect"**
+3. Selecciona **"Node.js"** como lenguaje de conexión
+4. Copia las credenciales que te muestra (las necesitarás para Render):
+   - `DB_HOST`: algo como `gateway01.us-west-2.prod.aws.tidbcloud.com` o similar
+   - `DB_PORT`: `4000` ⚠️ **IMPORTANTE**: TiDB usa puerto 4000, NO 3306
+   - `DB_USER`: tu usuario (algo como `xxxxx.root`)
+   - `DB_PASSWORD`: la contraseña que te muestra (o la que configuraste)
+   - `DB_NAME`: el nombre de tu cluster (ej: `personajes`)
+   - **Nota**: TiDB requiere SSL, ya está configurado en el código con `DB_SSL=true`
 
-1. En PlanetScale, ve a **"Console"** → **"SQL Editor"**
-2. Ejecuta el script de creación de tablas:
+**💡 Tip**: Guarda estas credenciales en un lugar seguro, las necesitarás para configurar Render.
 
-```sql
--- Copia y pega el contenido de backend/database.sql
--- O ejecuta las migraciones una por una desde backend/migrations/
-```
+#### 2.4 Ejecutar Migraciones y Seeds
 
-3. Ejecuta el seed de categorías:
+**⚠️ IMPORTANTE**: Debes ejecutar los scripts en este orden:
+1. **Primero**: Crear las tablas (`create_tables.sql`)
+2. **Segundo**: Poblar con datos (`categories_seed.sql`)
 
-```sql
--- Copia y pega el contenido de backend/seeds/categories_seed.sql
-```
+Tienes dos opciones para ejecutar los scripts SQL:
 
-**💡 Tip**: Si tienes un archivo SQL completo, puedes ejecutarlo todo de una vez en el SQL Editor.
+**Opción A: Usando el SQL Editor de TiDB Cloud (Recomendado)**
+
+1. En el dashboard de TiDB Cloud, haz clic en tu cluster
+2. Ve a la pestaña **"SQL Editor"** o busca **"Chat2Query"** / **"SQL Editor"**
+3. **Paso 1 - Crear tablas:**
+   - Abre el archivo `backend/create_tables.sql` en tu proyecto
+   - Copia y pega **TODO** el contenido en el SQL Editor
+   - Haz clic en **"Run"** o **"Execute"**
+   - Verifica que se crearon las 4 tablas: `users`, `categories`, `characters`, `games`
+4. **Paso 2 - Poblar categorías y personajes:**
+   - Abre el archivo `backend/seeds/categories_seed.sql`
+   - Copia y pega **TODO** el contenido en el SQL Editor
+   - Haz clic en **"Run"** o **"Execute"**
+   - Esto insertará todas las categorías y personajes predefinidos
+
+**Opción B: Usando un Cliente MySQL**
+
+1. Descarga un cliente MySQL como [MySQL Workbench](https://www.mysql.com/products/workbench/) o [DBeaver](https://dbeaver.io/)
+2. Conéctate usando las credenciales de TiDB:
+   - Host: `gateway01.us-west-2.prod.aws.tidbcloud.com` (tu host)
+   - Port: `4000` ⚠️ **No uses 3306**
+   - Username: tu usuario
+   - Password: tu contraseña
+   - Database: nombre de tu cluster
+   - SSL: Habilitado
+3. **Paso 1**: Ejecuta `backend/create_tables.sql` completo
+4. **Paso 2**: Ejecuta `backend/seeds/categories_seed.sql` completo
+
+**💡 Tip**: Si tienes problemas conectando con un cliente, verifica que estés usando el puerto 4000 y que SSL esté habilitado.
+
+**📝 Nota**: El archivo `categories_seed.sql` solo contiene INSERTs, NO crea las tablas. Por eso debes ejecutar primero `create_tables.sql`.
+
+1. Ve a [northflank.com](https://northflank.com)
+2. Crea cuenta gratuita
+3. Crea un servicio MySQL
+4. Obtén las credenciales de conexión
 
 ---
 
@@ -114,15 +152,21 @@ git push origin main
 ```
 PORT=10000
 NODE_ENV=production
-DB_HOST=xxxxx.us-east-2.psdb.cloud
-DB_PORT=3306
+DB_HOST=gateway01.us-west-2.prod.aws.tidbcloud.com
+DB_PORT=4000
 DB_NAME=personajes
-DB_USER=tu-usuario-de-planetscale
-DB_PASSWORD=tu-contraseña-de-planetscale
+DB_USER=tu-usuario-de-tidb
+DB_PASSWORD=tu-contraseña-de-tidb
 DB_SSL=true
 JWT_SECRET=genera-uno-seguro-aqui
 FRONTEND_URL=https://tu-app.vercel.app
 ```
+
+**⚠️ IMPORTANTE para TiDB Cloud:**
+- `DB_PORT` debe ser `4000` (NO 3306)
+- `DB_SSL` debe ser `true` (OBLIGATORIO para TiDB Cloud Starter/Essential)
+- Reemplaza `DB_HOST`, `DB_USER`, `DB_PASSWORD` y `DB_NAME` con tus credenciales reales de TiDB Cloud
+- **Nota**: También puedes usar variables `TIDB_*` según la documentación oficial (ver `backend/TIDB_CONNECTION.md`)
 
 **🔑 Generar JWT_SECRET seguro:**
 ```bash
@@ -328,10 +372,13 @@ Render soporta WebSockets, pero si tienes problemas:
 **Síntomas**: Error "Error conectando a MySQL" en los logs de Render
 
 **Solución**:
-1. Verifica que las credenciales en Render son correctas
-2. Verifica que `DB_SSL=true` está configurado
-3. Verifica que PlanetScale permite conexiones externas (debería por defecto)
-4. Revisa los logs de Render para más detalles
+1. Verifica que las credenciales en Render son correctas (copia exacta desde TiDB Cloud)
+2. **IMPORTANTE para TiDB**: Verifica que `DB_SSL=true` y que el puerto es `4000` (NO 3306)
+3. Verifica que el `DB_HOST` es exactamente el que te dio TiDB Cloud (algo como `gateway01.us-west-2.prod.aws.tidbcloud.com`)
+4. Verifica que el `DB_USER` incluye el formato correcto (ej: `xxxxx.root`)
+5. Verifica que el `DB_NAME` es el nombre de tu cluster en TiDB
+6. Revisa los logs de Render para más detalles del error
+7. Si el error persiste, verifica en TiDB Cloud que el cluster esté activo y funcionando
 
 ### CORS Errors
 
@@ -374,10 +421,16 @@ Render soporta WebSockets, pero si tienes problemas:
 
 **Total: $0/mes** ✅
 
-- Render.com: Gratis (con límites)
-- PlanetScale: Gratis (5 GB, suficiente para desarrollo)
+- Render.com: Gratis (con límites, se "duerme" después de 15 min)
+- TiDB Cloud Serverless: Completamente gratis (5 GB por base de datos, sin límite de tiempo)
 - Vercel: Gratis (ilimitado para proyectos personales)
 - Expo EAS: Gratis para Android
+
+**Límites del plan gratis de TiDB Cloud:**
+- 5 GB de almacenamiento por base de datos
+- Hasta 5 bases de datos
+- Sin límite de tiempo
+- Sin tarjeta de crédito requerida
 
 ---
 
