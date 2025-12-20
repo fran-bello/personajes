@@ -129,3 +129,4 @@ console.log('   4. Crea cuenta en Vercel para frontend');
 console.log('   5. Configura las variables de entorno en cada servicio\n');
 
 process.exit(errors.length > 0 ? 1 : 0);
+
