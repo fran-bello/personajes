@@ -1631,7 +1631,7 @@ function LocalGame() {
     const numTeams = getNumTeams();
 
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px' }}>
         <Modal
           isOpen={showExitModal}
           onClose={() => setShowExitModal(false)}
@@ -1642,37 +1642,37 @@ function LocalGame() {
           cancelText="Cancelar"
           variant="danger"
         />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '0 32px' }}>
-          <div style={{ backgroundColor: colors.primary, padding: '8px 24px', borderRadius: '20px', marginBottom: '24px' }}>
-            <div style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', letterSpacing: '2px' }}>RONDA {round}</div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '0 20px' }}>
+          <div style={{ backgroundColor: colors.primary, padding: '6px 20px', borderRadius: '20px', marginBottom: '16px' }}>
+            <div style={{ color: colors.text, fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px' }}>RONDA {round}</div>
           </div>
 
-          <div style={{ fontSize: '80px', marginBottom: '16px' }}>{roundInfo.icon}</div>
-          <h1 style={{ color: colors.text, fontSize: '42px', fontWeight: 'bold', marginBottom: '16px', letterSpacing: '2px' }}>{roundInfo.title}</h1>
+          <div style={{ fontSize: '64px', marginBottom: '12px' }}>{roundInfo.icon}</div>
+          <h1 style={{ color: colors.text, fontSize: '36px', fontWeight: 'bold', marginBottom: '12px', letterSpacing: '2px' }}>{roundInfo.title}</h1>
           
-          <p style={{ color: colors.textSecondary, fontSize: '18px', textAlign: 'center', marginBottom: '32px', lineHeight: '26px' }}>{roundInfo.description}</p>
+          <p style={{ color: colors.textSecondary, fontSize: '16px', textAlign: 'center', marginBottom: '20px', lineHeight: '22px' }}>{roundInfo.description}</p>
 
-          <div style={{ backgroundColor: colors.surface, borderRadius: '16px', padding: '20px', width: '100%', marginBottom: '24px' }}>
+          <div style={{ backgroundColor: colors.surface, borderRadius: '16px', padding: '16px', width: '100%', marginBottom: '16px' }}>
             {roundInfo.tips.map((tip, index) => (
-              <div key={index} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px' }}>
-                <span style={{ color: colors.primary, fontSize: '18px', marginRight: '12px', fontWeight: 'bold' }}>•</span>
-                <span style={{ color: colors.text, fontSize: '15px', flex: 1, lineHeight: '22px' }}>{tip}</span>
+              <div key={index} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: index < roundInfo.tips.length - 1 ? '8px' : '0' }}>
+                <span style={{ color: colors.primary, fontSize: '16px', marginRight: '10px', fontWeight: 'bold' }}>•</span>
+                <span style={{ color: colors.text, fontSize: '14px', flex: 1, lineHeight: '20px' }}>{tip}</span>
               </div>
             ))}
           </div>
 
           {round > 1 && numTeams > 0 && (
-            <div style={{ alignItems: 'center', marginTop: '8px' }}>
-              <div style={{ color: colors.textMuted, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Puntuación actual</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div style={{ alignItems: 'center', marginTop: '12px' }}>
+              <div style={{ color: colors.textMuted, fontSize: '11px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>Puntuación actual</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
                 {Array.from({ length: numTeams }, (_, i) => i + 1).map((teamNum) => {
                   const teamScore = getTotalScore(teamNum);
                   const teamColors = [colors.primary, colors.secondary, colors.warning, colors.success, colors.danger];
                   const teamColor = teamColors[(teamNum - 1) % teamColors.length];
                   return (
                     <div key={teamNum} style={{ alignItems: 'center' }}>
-                      <div style={{ color: teamColor, fontSize: '12px', fontWeight: '600' }}>{gameMode === 'pairs' ? `Pareja ${teamNum}` : `Equipo ${teamNum}`}</div>
-                      <div style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold' }}>{teamScore}</div>
+                      <div style={{ color: teamColor, fontSize: '11px', fontWeight: '600' }}>{gameMode === 'pairs' ? `Pareja ${teamNum}` : `Equipo ${teamNum}`}</div>
+                      <div style={{ color: colors.text, fontSize: '28px', fontWeight: 'bold' }}>{teamScore}</div>
                     </div>
                   );
                 })}
@@ -1681,24 +1681,24 @@ function LocalGame() {
           )}
         </div>
 
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <Button
             title="¡Comenzar Ronda!"
             onClick={() => setGameState('waiting')}
             size="large"
-            style={{ margin: '0 24px 8px 24px' }}
+            style={{ margin: '0 20px 6px 20px' }}
           />
           <button
             onClick={() => setShowExitModal(true)}
             style={{
-              width: 'calc(100% - 48px)',
-              margin: '0 24px 32px 24px',
+              width: 'calc(100% - 40px)',
+              margin: '0 20px 20px 20px',
               textAlign: 'center',
-              padding: '8px',
+              padding: '6px',
               border: 'none',
               background: 'transparent',
               color: colors.textMuted,
-              fontSize: '14px',
+              fontSize: '13px',
               cursor: 'pointer',
             }}
           >
@@ -1715,7 +1715,7 @@ function LocalGame() {
     const currentPlayer = getCurrentPlayer();
 
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px' }}>
         <Modal
           isOpen={showExitModal}
           onClose={() => setShowExitModal(false)}
@@ -1726,30 +1726,30 @@ function LocalGame() {
           cancelText="Cancelar"
           variant="danger"
         />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '0 32px' }}>
-          <div style={{ backgroundColor: colors.surface, padding: '10px 20px', borderRadius: '20px', marginBottom: '16px' }}>
-            <div style={{ color: colors.warning, fontSize: '18px', fontWeight: 'bold' }}>⏱️ {timeLeft}s restantes</div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '0 20px' }}>
+          <div style={{ backgroundColor: colors.surface, padding: '8px 18px', borderRadius: '20px', marginBottom: '12px' }}>
+            <div style={{ color: colors.warning, fontSize: '16px', fontWeight: 'bold' }}>⏱️ {timeLeft}s restantes</div>
           </div>
 
-          <div style={{ backgroundColor: colors.warning, padding: '8px 24px', borderRadius: '20px', marginBottom: '24px' }}>
-            <div style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', letterSpacing: '2px' }}>¡NUEVA RONDA!</div>
+          <div style={{ backgroundColor: colors.warning, padding: '6px 20px', borderRadius: '20px', marginBottom: '16px' }}>
+            <div style={{ color: colors.text, fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px' }}>¡NUEVA RONDA!</div>
           </div>
 
-          <div style={{ fontSize: '80px', marginBottom: '16px' }}>{roundInfo.icon}</div>
-          <h1 style={{ color: colors.text, fontSize: '42px', fontWeight: 'bold', marginBottom: '16px', letterSpacing: '2px' }}>RONDA {round}: {roundInfo.title}</h1>
+          <div style={{ fontSize: '64px', marginBottom: '12px' }}>{roundInfo.icon}</div>
+          <h1 style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold', marginBottom: '12px', letterSpacing: '2px' }}>RONDA {round}: {roundInfo.title}</h1>
           
-          <p style={{ color: colors.textSecondary, fontSize: '18px', textAlign: 'center', marginBottom: '32px', lineHeight: '26px' }}>{roundInfo.description}</p>
+          <p style={{ color: colors.textSecondary, fontSize: '16px', textAlign: 'center', marginBottom: '20px', lineHeight: '22px' }}>{roundInfo.description}</p>
 
-          <div style={{ backgroundColor: colors.surface, borderRadius: '16px', padding: '20px', width: '100%', alignItems: 'center', marginTop: '16px' }}>
-            <div style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '8px' }}>Sigues jugando:</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ fontSize: '40px' }}>{currentPlayer?.avatar}</div>
-              <div style={{ color: colors.text, fontSize: '24px', fontWeight: 'bold' }}>{currentPlayer ? capitalize(currentPlayer.name) : ''}</div>
+          <div style={{ backgroundColor: colors.surface, borderRadius: '16px', padding: '16px', width: '100%', alignItems: 'center', marginTop: '12px' }}>
+            <div style={{ color: colors.textMuted, fontSize: '13px', marginBottom: '6px' }}>Sigues jugando:</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ fontSize: '36px' }}>{currentPlayer?.avatar}</div>
+              <div style={{ color: colors.text, fontSize: '20px', fontWeight: 'bold' }}>{currentPlayer ? capitalize(currentPlayer.name) : ''}</div>
             </div>
           </div>
         </div>
 
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '32px' }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '20px' }}>
           <Button
             title="¡Continuar!"
             onClick={() => {
@@ -1758,19 +1758,19 @@ function LocalGame() {
               setGameState('playing');
             }}
             size="large"
-            style={{ margin: '0 24px 8px 24px' }}
+            style={{ margin: '0 20px 6px 20px' }}
           />
           <button
             onClick={() => setShowExitModal(true)}
             style={{
-              width: 'calc(100% - 48px)',
-              margin: '0 24px 32px 24px',
+              width: 'calc(100% - 40px)',
+              margin: '0 20px 20px 20px',
               textAlign: 'center',
-              padding: '8px',
+              padding: '6px',
               border: 'none',
               background: 'transparent',
               color: colors.textMuted,
-              fontSize: '14px',
+              fontSize: '13px',
               cursor: 'pointer',
             }}
           >
@@ -1787,7 +1787,7 @@ function LocalGame() {
     const numTeams = getNumTeams();
 
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '24px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
         <Modal
           isOpen={showExitModal}
           onClose={() => setShowExitModal(false)}
@@ -1798,22 +1798,22 @@ function LocalGame() {
           cancelText="Cancelar"
           variant="danger"
         />
-        <Card style={{ textAlign: 'center', padding: '32px 24px', width: '100%', maxWidth: '400px' }}>
-          <div style={{ color: colors.primary, fontSize: '18px', fontWeight: '600', marginBottom: '4px' }}>Ronda {round}</div>
-          <div style={{ color: colors.textSecondary, fontSize: '14px', textAlign: 'center', marginBottom: '16px' }}>{roundRules[round]}</div>
+        <Card style={{ textAlign: 'center', padding: '24px 20px', width: '100%', maxWidth: '400px' }}>
+          <div style={{ color: colors.primary, fontSize: '16px', fontWeight: '600', marginBottom: '4px' }}>Ronda {round}</div>
+          <div style={{ color: colors.textSecondary, fontSize: '13px', textAlign: 'center', marginBottom: '12px' }}>{roundRules[round]}</div>
           
-          <div style={{ width: '100%', height: '1px', backgroundColor: colors.border, margin: '16px 0' }} />
+          <div style={{ width: '100%', height: '1px', backgroundColor: colors.border, margin: '12px 0' }} />
           
-          <div style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '8px' }}>Siguiente turno:</div>
+          <div style={{ color: colors.textMuted, fontSize: '13px', marginBottom: '6px' }}>Siguiente turno:</div>
           <div style={{ position: 'relative', alignItems: 'center' }}>
             {nextPlayer && isPlayerMVP(nextPlayer.id) && (
-              <div style={{ position: 'absolute', top: '-20px', left: '50%', transform: 'translateX(-50%)', fontSize: '32px', zIndex: 1 }}>👑</div>
+              <div style={{ position: 'absolute', top: '-18px', left: '50%', transform: 'translateX(-50%)', fontSize: '28px', zIndex: 1 }}>👑</div>
             )}
-            <div style={{ fontSize: '64px', marginBottom: '8px' }}>{nextPlayer?.avatar}</div>
+            <div style={{ fontSize: '56px', marginBottom: '6px' }}>{nextPlayer?.avatar}</div>
           </div>
-          <div style={{ color: colors.text, fontSize: '36px', fontWeight: 'bold', textAlign: 'center', marginBottom: '4px' }}>{nextPlayer?.name}</div>
+          <div style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold', textAlign: 'center', marginBottom: '4px' }}>{nextPlayer?.name}</div>
           {nextPlayer && (
-            <div style={{ color: colors.textMuted, fontSize: '13px', marginBottom: '12px' }}>
+            <div style={{ color: colors.textMuted, fontSize: '12px', marginBottom: '10px' }}>
               ✓ {getPlayerStats(nextPlayer.id).hits} aciertos • ✗ {getPlayerStats(nextPlayer.id).fails} fallos
             </div>
           )}
@@ -1822,31 +1822,31 @@ function LocalGame() {
               const teamColors = [colors.primary, colors.secondary, colors.warning, colors.success, colors.danger];
               return teamColors[(currentTeam - 1) % teamColors.length];
             })(),
-            padding: '8px 20px',
+            padding: '6px 18px',
             borderRadius: '20px',
             display: 'inline-block',
-            marginBottom: '24px',
+            marginBottom: '16px',
           }}>
-            <div style={{ color: colors.text, fontSize: '16px', fontWeight: '600' }}>{gameMode === 'pairs' ? `Pareja ${currentTeam}` : `Equipo ${currentTeam}`}</div>
+            <div style={{ color: colors.text, fontSize: '14px', fontWeight: '600' }}>{gameMode === 'pairs' ? `Pareja ${currentTeam}` : `Equipo ${currentTeam}`}</div>
           </div>
           
           {numTeams > 0 && (
-            <div style={{ display: 'flex', gap: '24px', marginTop: '24px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '20px', marginTop: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
               {Array.from({ length: numTeams }, (_, i) => i + 1).map((teamNum) => {
                 const teamScore = getTotalScore(teamNum);
                 const teamColors = [colors.primary, colors.secondary, colors.warning, colors.success, colors.danger];
                 const teamColor = teamColors[(teamNum - 1) % teamColors.length];
                 return (
                   <div key={teamNum} style={{ alignItems: 'center' }}>
-                    <div style={{ color: teamColor, fontSize: '12px' }}>{gameMode === 'pairs' ? `Pareja ${teamNum}` : `Equipo ${teamNum}`}</div>
-                    <div style={{ color: colors.text, fontSize: '28px', fontWeight: 'bold' }}>{teamScore}</div>
+                    <div style={{ color: teamColor, fontSize: '11px' }}>{gameMode === 'pairs' ? `Pareja ${teamNum}` : `Equipo ${teamNum}`}</div>
+                    <div style={{ color: colors.text, fontSize: '24px', fontWeight: 'bold' }}>{teamScore}</div>
                   </div>
                 );
               })}
             </div>
           )}
 
-          <div style={{ color: colors.textMuted, fontSize: '14px', textAlign: 'center', marginTop: '24px', fontStyle: 'italic' }}>
+          <div style={{ color: colors.textMuted, fontSize: '13px', textAlign: 'center', marginTop: '16px', fontStyle: 'italic' }}>
             Pasa el dispositivo a {nextPlayer?.name}
           </div>
           
@@ -1854,20 +1854,20 @@ function LocalGame() {
             title="¡Estoy Listo!"
             onClick={handlePlayerReady}
             size="large"
-            style={{ marginTop: '24px', width: '100%' }}
+            style={{ marginTop: '16px', width: '100%' }}
           />
           <button
             onClick={() => setShowExitModal(true)}
             style={{
               width: '100%',
               textAlign: 'center',
-              padding: '8px',
+              padding: '6px',
               border: 'none',
               background: 'transparent',
               color: colors.textMuted,
-              fontSize: '14px',
+              fontSize: '13px',
               cursor: 'pointer',
-              marginTop: '8px',
+              marginTop: '6px',
             }}
           >
             🚪 Salir del Juego
@@ -2095,13 +2095,13 @@ function LocalGame() {
     const winningTeams = teamScores.filter(t => t.score === maxScore);
 
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', padding: '24px', paddingBottom: '40px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', padding: '20px', paddingBottom: '32px' }}>
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <div style={{ alignItems: 'center', marginBottom: '24px' }}>
-            <div style={{ fontSize: '56px', marginBottom: '8px' }}>🏆</div>
-            <h1 style={{ color: colors.text, fontSize: '26px', fontWeight: 'bold', marginBottom: '20px' }}>¡Juego Terminado!</h1>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
+            <div style={{ fontSize: '56px', marginBottom: '8px', textAlign: 'center' }}>🏆</div>
+            <h1 style={{ color: colors.text, fontSize: '26px', fontWeight: 'bold', marginBottom: '16px', textAlign: 'center' }}>¡Juego Terminado!</h1>
             {numTeams > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
                 {teamScores.map((teamScore, index) => {
                   const teamColors = [colors.primary, colors.secondary, colors.warning, colors.success, colors.danger];
                   const teamColor = teamColors[(teamScore.teamNum - 1) % teamColors.length];
@@ -2109,19 +2109,19 @@ function LocalGame() {
                   return (
                     <div key={teamScore.teamNum} style={{
                       alignItems: 'center',
-                      padding: '16px',
+                      padding: '12px',
                       borderRadius: '16px',
                       backgroundColor: colors.surface,
                       border: isWinner ? `2px solid ${colors.warning}` : 'none',
                     }}>
-                      <div style={{ color: teamColor, fontSize: '14px', marginBottom: '4px' }}>{gameMode === 'pairs' ? `Pareja ${teamScore.teamNum}` : `Equipo ${teamScore.teamNum}`}</div>
-                      <div style={{ color: colors.text, fontSize: '40px', fontWeight: 'bold' }}>{teamScore.score}</div>
+                      <div style={{ color: teamColor, fontSize: '12px', marginBottom: '4px' }}>{gameMode === 'pairs' ? `Pareja ${teamScore.teamNum}` : `Equipo ${teamScore.teamNum}`}</div>
+                      <div style={{ color: colors.text, fontSize: '36px', fontWeight: 'bold' }}>{teamScore.score}</div>
                     </div>
                   );
                 })}
               </div>
             )}
-            <div style={{ color: colors.text, fontSize: '22px', fontWeight: 'bold', marginBottom: '8px' }}>
+            <div style={{ color: colors.text, fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', textAlign: 'center' }}>
               {winningTeams.length === 1 && maxScore > 0 
                 ? `🎉 ¡${gameMode === 'pairs' ? 'Pareja' : 'Equipo'} ${winningTeams[0].teamNum} Gana!`
                 : winningTeams.length > 1 
@@ -2132,27 +2132,27 @@ function LocalGame() {
           </div>
 
           {mvpPlayer && mvpStats.hits > 0 && (
-            <Card style={{ marginBottom: '16px', border: `2px solid ${colors.warning}` }}>
-              <div style={{ color: colors.warning, fontSize: '16px', fontWeight: 'bold', textAlign: 'center', marginBottom: '16px' }}>⭐ MVP del Juego ⭐</div>
+            <Card style={{ marginBottom: '12px', border: `2px solid ${colors.warning}` }}>
+              <div style={{ color: colors.warning, fontSize: '14px', fontWeight: 'bold', textAlign: 'center', marginBottom: '12px' }}>⭐ MVP del Juego ⭐</div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ position: 'relative', marginRight: '16px' }}>
-                  <div style={{ position: 'absolute', top: '-16px', left: '50%', transform: 'translateX(-50%)', fontSize: '24px', zIndex: 1 }}>👑</div>
-                  <div style={{ fontSize: '56px' }}>{mvpPlayer.avatar}</div>
+                <div style={{ position: 'relative', marginRight: '12px' }}>
+                  <div style={{ position: 'absolute', top: '-14px', left: '50%', transform: 'translateX(-50%)', fontSize: '20px', zIndex: 1 }}>👑</div>
+                  <div style={{ fontSize: '48px' }}>{mvpPlayer.avatar}</div>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ color: colors.text, fontSize: '22px', fontWeight: 'bold' }}>{capitalize(mvpPlayer.name)}</div>
-                  <div style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '8px' }}>Equipo {mvpPlayer.team}</div>
-                  <div style={{ display: 'flex', gap: '16px' }}>
-                    <div style={{ color: colors.success, fontSize: '18px', fontWeight: 'bold' }}>✓ {mvpStats.hits}</div>
-                    <div style={{ color: colors.danger, fontSize: '18px', fontWeight: 'bold' }}>✗ {mvpStats.fails}</div>
+                  <div style={{ color: colors.text, fontSize: '20px', fontWeight: 'bold' }}>{capitalize(mvpPlayer.name)}</div>
+                  <div style={{ color: colors.textMuted, fontSize: '13px', marginBottom: '6px' }}>Equipo {mvpPlayer.team}</div>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ color: colors.success, fontSize: '16px', fontWeight: 'bold' }}>✓ {mvpStats.hits}</div>
+                    <div style={{ color: colors.danger, fontSize: '16px', fontWeight: 'bold' }}>✗ {mvpStats.fails}</div>
                   </div>
                 </div>
               </div>
             </Card>
           )}
 
-          <Card style={{ marginBottom: '24px' }}>
-            <h2 style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>📊 Estadísticas de Jugadores</h2>
+          <Card style={{ marginBottom: '16px' }}>
+            <h2 style={{ color: colors.text, fontSize: '15px', fontWeight: 'bold', marginBottom: '12px' }}>📊 Estadísticas de Jugadores</h2>
             {rankedPlayers.map((player, index) => {
               const stats = getPlayerStats(player.id);
               const isFirst = index === 0 && stats.hits > 0;
@@ -2162,8 +2162,8 @@ function LocalGame() {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    padding: '12px 0',
-                    borderBottom: `1px solid ${colors.border}`,
+                    padding: '10px 0',
+                    borderBottom: index < rankedPlayers.length - 1 ? `1px solid ${colors.border}` : 'none',
                     backgroundColor: isFirst ? colors.surfaceLight : 'transparent',
                     margin: isFirst ? '0 -16px' : '0',
                     paddingLeft: isFirst ? '16px' : '0',
@@ -2171,25 +2171,25 @@ function LocalGame() {
                     borderRadius: isFirst ? '8px' : '0',
                   }}
                 >
-                  <div style={{ color: colors.textMuted, fontSize: '14px', fontWeight: 'bold', width: '30px' }}>#{index + 1}</div>
-                  <div style={{ fontSize: '28px', marginRight: '12px' }}>{player.avatar}</div>
+                  <div style={{ color: colors.textMuted, fontSize: '13px', fontWeight: 'bold', width: '28px' }}>#{index + 1}</div>
+                  <div style={{ fontSize: '24px', marginRight: '10px' }}>{player.avatar}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <div style={{ color: colors.text, fontSize: '16px', fontWeight: '600' }}>{capitalize(player.name)}</div>
-                      {isFirst && <div style={{ fontSize: '14px' }}>👑</div>}
+                      <div style={{ color: colors.text, fontSize: '15px', fontWeight: '600' }}>{capitalize(player.name)}</div>
+                      {isFirst && <div style={{ fontSize: '12px' }}>👑</div>}
                     </div>
-                    <div style={{ color: colors.textMuted, fontSize: '12px' }}>Equipo {player.team}</div>
+                    <div style={{ color: colors.textMuted, fontSize: '11px' }}>Equipo {player.team}</div>
                   </div>
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <div style={{ color: colors.success, fontSize: '14px', fontWeight: 'bold' }}>✓ {stats.hits}</div>
-                    <div style={{ color: colors.danger, fontSize: '14px', fontWeight: 'bold' }}>✗ {stats.fails}</div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ color: colors.success, fontSize: '13px', fontWeight: 'bold' }}>✓ {stats.hits}</div>
+                    <div style={{ color: colors.danger, fontSize: '13px', fontWeight: 'bold' }}>✗ {stats.fails}</div>
                   </div>
                 </div>
               );
             })}
           </Card>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <Button title="🔄 Jugar Otra Vez (mismos jugadores)" onClick={playAgain} size="large" />
             <Button title="Nueva Partida" onClick={resetGame} variant="outline" size="large" />
             <Button title="Volver al Menú" onClick={() => navigate('/dashboard')} variant="secondary" size="large" />

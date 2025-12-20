@@ -666,7 +666,7 @@ function GameRoom() {
     const activePlayer = currentTeamPlayers.length > 0 ? currentTeamPlayers[currentPlayerIndex % currentTeamPlayers.length] : null;
 
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px' }}>
         <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 10 }}>
           <Button
             title="Salir"
@@ -682,37 +682,37 @@ function GameRoom() {
           />
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ backgroundColor: colors.warning, padding: '10px 20px', borderRadius: '20px', marginBottom: '16px' }}>
-            <div style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold' }}>⏱️ {actualTimeLeft}s restantes</div>
+          <div style={{ backgroundColor: colors.warning, padding: '8px 18px', borderRadius: '20px', marginBottom: '12px' }}>
+            <div style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold' }}>⏱️ {actualTimeLeft}s restantes</div>
           </div>
 
-          <div style={{ backgroundColor: colors.warning, padding: '8px 24px', borderRadius: '20px', marginBottom: '24px' }}>
-            <div style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', letterSpacing: '2px' }}>¡NUEVA RONDA!</div>
+          <div style={{ backgroundColor: colors.warning, padding: '6px 20px', borderRadius: '20px', marginBottom: '16px' }}>
+            <div style={{ color: colors.text, fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px' }}>¡NUEVA RONDA!</div>
           </div>
 
-          <div style={{ fontSize: '80px', marginBottom: '16px' }}>{roundInfo.icon}</div>
-          <h1 style={{ color: colors.text, fontSize: '42px', fontWeight: 'bold', marginBottom: '16px', letterSpacing: '2px', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: '64px', marginBottom: '12px' }}>{roundInfo.icon}</div>
+          <h1 style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold', marginBottom: '12px', letterSpacing: '2px', textTransform: 'uppercase' }}>
             RONDA {game.currentRound}: {roundInfo.title}
           </h1>
-          <p style={{ color: colors.textSecondary, fontSize: '18px', textAlign: 'center', marginBottom: '32px', lineHeight: '26px', maxWidth: '600px' }}>
+          <p style={{ color: colors.textSecondary, fontSize: '16px', textAlign: 'center', marginBottom: '20px', lineHeight: '22px', maxWidth: '600px' }}>
             {roundInfo.description}
           </p>
 
-          <Card style={{ width: '100%', maxWidth: '600px', marginBottom: '24px' }}>
+          <Card style={{ width: '100%', maxWidth: '600px', marginBottom: '16px' }}>
             {roundInfo.tips.map((tip, index) => (
-              <div key={index} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px' }}>
-                <span style={{ color: colors.primary, fontSize: '18px', fontWeight: 'bold', marginRight: '12px' }}>•</span>
-                <p style={{ color: colors.text, fontSize: '15px', flex: 1, lineHeight: '22px', margin: 0 }}>{tip}</p>
+              <div key={index} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: index < roundInfo.tips.length - 1 ? '8px' : '0' }}>
+                <span style={{ color: colors.primary, fontSize: '16px', fontWeight: 'bold', marginRight: '10px' }}>•</span>
+                <p style={{ color: colors.text, fontSize: '14px', flex: 1, lineHeight: '20px', margin: 0 }}>{tip}</p>
               </div>
             ))}
           </Card>
 
           {activePlayer && (
-            <div style={{ backgroundColor: colors.surface, borderRadius: '16px', padding: '20px', width: '100%', maxWidth: '600px', alignItems: 'center', marginTop: '16px', marginBottom: '32px' }}>
-              <div style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '8px', textTransform: 'uppercase' }}>
+            <div style={{ backgroundColor: colors.surface, borderRadius: '16px', padding: '16px', width: '100%', maxWidth: '600px', alignItems: 'center', marginTop: '12px', marginBottom: '20px' }}>
+              <div style={{ color: colors.textMuted, fontSize: '13px', marginBottom: '6px', textTransform: 'uppercase' }}>
                 {canConfirm ? 'Sigues jugando:' : 'Jugando ahora:'}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center' }}>
                 {(() => {
                   const playerId = typeof activePlayer.user === 'object' ? (activePlayer.user.id || activePlayer.user._id) : activePlayer.user;
                   const playerGoogleAvatar = typeof activePlayer.user === 'object' ? activePlayer.user.avatar : null;
@@ -747,36 +747,36 @@ function GameRoom() {
           )}
         </div>
 
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '32px' }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '20px' }}>
           {canConfirm ? (
             <>
               <Button
                 title="¡Continuar!"
                 onClick={handleRoundIntroSeen}
                 size="large"
-                style={{ marginHorizontal: '24px', marginBottom: '8px' }}
+                style={{ marginHorizontal: '20px', marginBottom: '6px' }}
               />
               <button
                 onClick={() => setShowExitModal(true)}
                 style={{
-                  width: 'calc(100% - 48px)',
-                  margin: '0 24px 32px 24px',
+                  width: 'calc(100% - 40px)',
+                  margin: '0 20px 20px 20px',
                   textAlign: 'center',
-                  padding: '8px',
+                  padding: '6px',
                   backgroundColor: 'transparent',
                   border: 'none',
                   color: colors.textMuted,
                   cursor: 'pointer',
-                  fontSize: '14px',
+                  fontSize: '13px',
                 }}
               >
                 🚪 Salir del Juego
               </button>
             </>
           ) : (
-            <div style={{ textAlign: 'center', padding: '24px', color: colors.textMuted }}>
-              <p style={{ fontSize: '16px', marginBottom: '8px' }}>Esperando a que el jugador continúe...</p>
-              <div style={{ fontSize: '32px' }}>⏳</div>
+            <div style={{ textAlign: 'center', padding: '20px', color: colors.textMuted }}>
+              <p style={{ fontSize: '15px', marginBottom: '6px' }}>Esperando a que el jugador continúe...</p>
+              <div style={{ fontSize: '28px' }}>⏳</div>
             </div>
           )}
         </div>
@@ -789,7 +789,7 @@ function GameRoom() {
     const roundInfo = roundDetails[game.currentRound];
 
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '20px' }}>
         <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 10 }}>
           <Button
             title="Salir"
@@ -805,67 +805,67 @@ function GameRoom() {
           />
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ backgroundColor: colors.primary, padding: '8px 24px', borderRadius: '20px', marginBottom: '24px' }}>
-            <span style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', letterSpacing: '2px' }}>
+          <div style={{ backgroundColor: colors.primary, padding: '6px 20px', borderRadius: '20px', marginBottom: '16px' }}>
+            <span style={{ color: colors.text, fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px' }}>
               RONDA {game.currentRound}
             </span>
           </div>
 
-          <div style={{ fontSize: '80px', marginBottom: '16px' }}>{roundInfo.icon}</div>
-          <h1 style={{ color: colors.text, fontSize: '42px', fontWeight: 'bold', marginBottom: '16px', letterSpacing: '2px', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: '64px', marginBottom: '12px' }}>{roundInfo.icon}</div>
+          <h1 style={{ color: colors.text, fontSize: '36px', fontWeight: 'bold', marginBottom: '12px', letterSpacing: '2px', textTransform: 'uppercase' }}>
             {roundInfo.title}
           </h1>
-          <p style={{ color: colors.textSecondary, fontSize: '18px', textAlign: 'center', marginBottom: '32px', lineHeight: '26px', maxWidth: '600px' }}>
+          <p style={{ color: colors.textSecondary, fontSize: '16px', textAlign: 'center', marginBottom: '20px', lineHeight: '22px', maxWidth: '600px' }}>
             {roundInfo.description}
           </p>
 
-          <Card style={{ width: '100%', maxWidth: '600px', marginBottom: '24px' }}>
+          <Card style={{ width: '100%', maxWidth: '600px', marginBottom: '16px' }}>
             {roundInfo.tips.map((tip, index) => (
-              <div key={index} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px' }}>
-                <span style={{ color: colors.primary, fontSize: '18px', fontWeight: 'bold', marginRight: '12px' }}>•</span>
-                <p style={{ color: colors.text, fontSize: '15px', flex: 1, lineHeight: '22px', margin: 0 }}>{tip}</p>
+              <div key={index} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: index < roundInfo.tips.length - 1 ? '8px' : '0' }}>
+                <span style={{ color: colors.primary, fontSize: '16px', fontWeight: 'bold', marginRight: '10px' }}>•</span>
+                <p style={{ color: colors.text, fontSize: '14px', flex: 1, lineHeight: '20px', margin: 0 }}>{tip}</p>
               </div>
             ))}
           </Card>
 
           {game.currentRound > 1 && (
-            <div style={{ alignItems: 'center', marginTop: '8px' }}>
-              <p style={{ color: colors.textMuted, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            <div style={{ alignItems: 'center', marginTop: '12px' }}>
+              <p style={{ color: colors.textMuted, fontSize: '11px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
                 Puntuación actual
               </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ alignItems: 'center' }}>
-                  <p style={{ color: colors.primary, fontSize: '12px', fontWeight: '600' }}>Equipo 1</p>
-                  <p style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold' }}>{team1Score}</p>
+                  <p style={{ color: colors.primary, fontSize: '11px', fontWeight: '600' }}>Equipo 1</p>
+                  <p style={{ color: colors.text, fontSize: '28px', fontWeight: 'bold' }}>{team1Score}</p>
                 </div>
-                <span style={{ color: colors.textMuted, fontSize: '14px' }}>vs</span>
+                <span style={{ color: colors.textMuted, fontSize: '12px' }}>vs</span>
                 <div style={{ alignItems: 'center' }}>
-                  <p style={{ color: colors.secondary, fontSize: '12px', fontWeight: '600' }}>Equipo 2</p>
-                  <p style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold' }}>{team2Score}</p>
+                  <p style={{ color: colors.secondary, fontSize: '11px', fontWeight: '600' }}>Equipo 2</p>
+                  <p style={{ color: colors.text, fontSize: '28px', fontWeight: 'bold' }}>{team2Score}</p>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <Button
             title="¡Continuar!"
             onClick={handleRoundIntroSeen}
             size="large"
-            style={{ marginHorizontal: '24px', marginBottom: '8px' }}
+            style={{ marginHorizontal: '20px', marginBottom: '6px' }}
           />
           <button
             onClick={() => setShowExitModal(true)}
             style={{
-              width: 'calc(100% - 48px)',
-              margin: '0 24px 32px 24px',
+              width: 'calc(100% - 40px)',
+              margin: '0 20px 20px 20px',
               textAlign: 'center',
-              padding: '8px',
+              padding: '6px',
               border: 'none',
               background: 'transparent',
               color: colors.textMuted,
-              fontSize: '14px',
+              fontSize: '13px',
               cursor: 'pointer',
             }}
           >
@@ -882,7 +882,7 @@ function GameRoom() {
     const amMVP = currentPlayerId ? isPlayerMVP(currentPlayerId) : false;
 
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
         <Modal
           isOpen={showExitModal}
           onClose={() => setShowExitModal(false)}
@@ -893,44 +893,44 @@ function GameRoom() {
           cancelText="Cancelar"
           variant="danger"
         />
-        <Card style={{ width: '100%', maxWidth: '400px', textAlign: 'center', padding: '32px 24px' }}>
-          <p style={{ color: colors.primary, fontSize: '18px', fontWeight: '600', marginBottom: '4px' }}>
+        <Card style={{ width: '100%', maxWidth: '400px', textAlign: 'center', padding: '24px 20px' }}>
+          <p style={{ color: colors.primary, fontSize: '16px', fontWeight: '600', marginBottom: '4px' }}>
             Ronda {game.currentRound}
           </p>
-          <p style={{ color: colors.textSecondary, fontSize: '14px', textAlign: 'center', marginBottom: '16px' }}>
+          <p style={{ color: colors.textSecondary, fontSize: '13px', textAlign: 'center', marginBottom: '12px' }}>
             {roundRules[game.currentRound]}
           </p>
 
-          <div style={{ width: '100%', height: '1px', backgroundColor: colors.border, margin: '16px 0' }} />
+          <div style={{ width: '100%', height: '1px', backgroundColor: colors.border, margin: '12px 0' }} />
 
-          <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '8px' }}>¡Es tu turno!</p>
-          {amMVP && <div style={{ fontSize: '32px', marginBottom: '4px' }}>👑</div>}
-          <h2 style={{ color: colors.text, fontSize: '32px', fontWeight: 'bold', textAlign: 'center', marginBottom: '4px' }}>
+          <p style={{ color: colors.textMuted, fontSize: '13px', marginBottom: '6px' }}>¡Es tu turno!</p>
+          {amMVP && <div style={{ fontSize: '28px', marginBottom: '4px' }}>👑</div>}
+          <h2 style={{ color: colors.text, fontSize: '28px', fontWeight: 'bold', textAlign: 'center', marginBottom: '4px' }}>
             {typeof currentPlayer?.user === 'object' ? currentPlayer?.user.username : 'Jugador'}
           </h2>
-          <p style={{ color: colors.textMuted, fontSize: '13px', marginBottom: '12px' }}>
+          <p style={{ color: colors.textMuted, fontSize: '12px', marginBottom: '10px' }}>
             ✓ {myStats.hits} aciertos • ✗ {myStats.fails} fallos
           </p>
           <div style={{
             backgroundColor: game.currentTeam === 1 ? colors.primary : colors.secondary,
-            padding: '8px 20px',
+            padding: '6px 18px',
             borderRadius: '20px',
             display: 'inline-block',
-            marginBottom: '24px',
+            marginBottom: '16px',
           }}>
-            <span style={{ color: colors.text, fontSize: '16px', fontWeight: '600' }}>
+            <span style={{ color: colors.text, fontSize: '14px', fontWeight: '600' }}>
               Equipo {game.currentTeam}
             </span>
           </div>
 
-          <div style={{ display: 'flex', gap: '48px', marginTop: '24px', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: '20px', marginTop: '16px', justifyContent: 'center' }}>
             <div style={{ alignItems: 'center' }}>
-              <p style={{ color: colors.primary, fontSize: '12px' }}>Equipo 1</p>
-              <p style={{ color: colors.text, fontSize: '28px', fontWeight: 'bold' }}>{team1Score}</p>
+              <p style={{ color: colors.primary, fontSize: '11px' }}>Equipo 1</p>
+              <p style={{ color: colors.text, fontSize: '24px', fontWeight: 'bold' }}>{team1Score}</p>
             </div>
             <div style={{ alignItems: 'center' }}>
-              <p style={{ color: colors.secondary, fontSize: '12px' }}>Equipo 2</p>
-              <p style={{ color: colors.text, fontSize: '28px', fontWeight: 'bold' }}>{team2Score}</p>
+              <p style={{ color: colors.secondary, fontSize: '11px' }}>Equipo 2</p>
+              <p style={{ color: colors.text, fontSize: '24px', fontWeight: 'bold' }}>{team2Score}</p>
             </div>
           </div>
 
@@ -938,20 +938,20 @@ function GameRoom() {
             title="¡Estoy Listo!"
             onClick={handlePlayerReady}
             size="large"
-            style={{ marginTop: '24px', width: '100%' }}
+            style={{ marginTop: '16px', width: '100%' }}
           />
           <button
             onClick={() => setShowExitModal(true)}
             style={{
               width: '100%',
               textAlign: 'center',
-              padding: '8px',
+              padding: '6px',
               border: 'none',
               background: 'transparent',
               color: colors.textMuted,
-              fontSize: '14px',
+              fontSize: '13px',
               cursor: 'pointer',
-              marginTop: '8px',
+              marginTop: '6px',
             }}
           >
             🚪 Salir del Juego
@@ -1501,46 +1501,46 @@ function GameRoom() {
       {/* Finished */}
       {game.status === 'finished' && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: '600px', margin: '0 auto' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '24px', width: '100%' }}>
-            <div style={{ fontSize: '56px', marginBottom: '8px' }}>🏆</div>
-            <h1 style={{ color: colors.text, fontSize: '26px', fontWeight: 'bold', marginBottom: '20px', textAlign: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', width: '100%' }}>
+            <div style={{ fontSize: '56px', marginBottom: '8px', textAlign: 'center' }}>🏆</div>
+            <h1 style={{ color: colors.text, fontSize: '26px', fontWeight: 'bold', marginBottom: '16px', textAlign: 'center' }}>
               ¡Juego Terminado!
             </h1>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', marginBottom: '16px', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '12px', width: '100%' }}>
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                padding: '16px',
+                padding: '12px',
                 borderRadius: '16px',
                 backgroundColor: colors.surface,
                 border: team1Score > team2Score ? `2px solid ${colors.warning}` : 'none',
               }}>
-                <p style={{ color: colors.primary, fontSize: '14px', marginBottom: '4px', margin: '0 0 4px 0' }}>Equipo 1</p>
-                <p style={{ color: colors.text, fontSize: '40px', fontWeight: 'bold', margin: 0 }}>{team1Score}</p>
+                <p style={{ color: colors.primary, fontSize: '12px', marginBottom: '4px', margin: '0 0 4px 0' }}>Equipo 1</p>
+                <p style={{ color: colors.text, fontSize: '36px', fontWeight: 'bold', margin: 0 }}>{team1Score}</p>
               </div>
-              <span style={{ color: colors.textMuted, fontSize: '16px' }}>vs</span>
+              <span style={{ color: colors.textMuted, fontSize: '14px' }}>vs</span>
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                padding: '16px',
+                padding: '12px',
                 borderRadius: '16px',
                 backgroundColor: colors.surface,
                 border: team2Score > team1Score ? `2px solid ${colors.warning}` : 'none',
               }}>
-                <p style={{ color: colors.secondary, fontSize: '14px', marginBottom: '4px', margin: '0 0 4px 0' }}>Equipo 2</p>
-                <p style={{ color: colors.text, fontSize: '40px', fontWeight: 'bold', margin: 0 }}>{team2Score}</p>
+                <p style={{ color: colors.secondary, fontSize: '12px', marginBottom: '4px', margin: '0 0 4px 0' }}>Equipo 2</p>
+                <p style={{ color: colors.text, fontSize: '36px', fontWeight: 'bold', margin: 0 }}>{team2Score}</p>
               </div>
             </div>
-            <h2 style={{ color: colors.text, fontSize: '22px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>
+            <h2 style={{ color: colors.text, fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', textAlign: 'center' }}>
               {team1Score > team2Score ? '🎉 ¡Equipo 1 Gana!' : team2Score > team1Score ? '🎉 ¡Equipo 2 Gana!' : '🤝 ¡Empate!'}
             </h2>
           </div>
 
           {/* Ranking de jugadores */}
-          <Card style={{ marginBottom: '16px', width: '100%' }}>
-            <h3 style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
+          <Card style={{ marginBottom: '12px', width: '100%' }}>
+            <h3 style={{ color: colors.text, fontSize: '15px', fontWeight: 'bold', marginBottom: '12px' }}>
               📊 Estadísticas de Jugadores
             </h3>
             {getPlayerRanking().map((player, index) => {
@@ -1554,7 +1554,7 @@ function GameRoom() {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    padding: '12px 0',
+                    padding: '10px 0',
                     borderBottom: index < getPlayerRanking().length - 1 ? `1px solid ${colors.border}` : 'none',
                     backgroundColor: isFirst ? colors.surfaceLight : 'transparent',
                     paddingLeft: isFirst ? '16px' : '0',
@@ -1564,21 +1564,21 @@ function GameRoom() {
                     borderRadius: isFirst ? '8px' : '0',
                   }}
                 >
-                  <span style={{ color: colors.textMuted, fontSize: '14px', fontWeight: 'bold', width: '30px' }}>
+                  <span style={{ color: colors.textMuted, fontSize: '13px', fontWeight: 'bold', width: '28px' }}>
                     #{index + 1}
                   </span>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ color: colors.text, fontSize: '16px', fontWeight: '600' }}>
+                      <span style={{ color: colors.text, fontSize: '15px', fontWeight: '600' }}>
                         {capitalize(playerName)}
                       </span>
-                      {isFirst && <span style={{ fontSize: '14px' }}>👑</span>}
+                      {isFirst && <span style={{ fontSize: '12px' }}>👑</span>}
                     </div>
-                    <p style={{ color: colors.textMuted, fontSize: '12px', margin: 0 }}>Equipo {player.team}</p>
+                    <p style={{ color: colors.textMuted, fontSize: '11px', margin: 0 }}>Equipo {player.team}</p>
                   </div>
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <span style={{ color: colors.success, fontSize: '14px', fontWeight: 'bold' }}>✓ {stats.hits}</span>
-                    <span style={{ color: colors.danger, fontSize: '14px', fontWeight: 'bold' }}>✗ {stats.fails}</span>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <span style={{ color: colors.success, fontSize: '13px', fontWeight: 'bold' }}>✓ {stats.hits}</span>
+                    <span style={{ color: colors.danger, fontSize: '13px', fontWeight: 'bold' }}>✗ {stats.fails}</span>
                   </div>
                 </div>
               );
