@@ -492,35 +492,36 @@
   outline: none;
   -webkit-user-select: none;
   user-select: none;
+  will-change: transform, opacity;
 }
 
 /* Animación de slide para cambio de tarjeta */
 .character-game-card.slide-out-right {
-  animation: slideOutRight 0.4s ease-in-out forwards;
+  animation: slideOutRight 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .character-game-card.slide-in-left {
-  animation: slideInLeft 0.4s ease-in-out forwards;
+  animation: slideInLeft 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @keyframes slideOutRight {
   0% {
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
     opacity: 1;
   }
   100% {
-    transform: translateX(100%);
+    transform: translateX(120%) scale(0.9);
     opacity: 0;
   }
 }
 
 @keyframes slideInLeft {
   0% {
-    transform: translateX(-100%);
+    transform: translateX(-120%) scale(0.9);
     opacity: 0;
   }
   100% {
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
     opacity: 1;
   }
 }

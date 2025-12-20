@@ -3,6 +3,10 @@
   background-color: transparent;
   padding: 24px;
   padding-bottom: 40px;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .dashboard-header {

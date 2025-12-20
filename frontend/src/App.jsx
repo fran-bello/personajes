@@ -9,6 +9,7 @@ import LocalGame from './components/LocalGame'
 import HowToPlay from './components/HowToPlay'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { colors } from './theme'
+import './App.css'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -24,16 +25,18 @@ function AppRoutes() {
   const { user } = useAuth()
 
   return (
-    <Routes>
-      <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
-      <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
-      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/create-game" element={<ProtectedRoute><CreateGame /></ProtectedRoute>} />
-      <Route path="/game/:roomCode" element={<ProtectedRoute><GameRoom /></ProtectedRoute>} />
-      <Route path="/local-game" element={<LocalGame />} />
-      <Route path="/how-to-play" element={<HowToPlay />} />
-      <Route path="/" element={<Navigate to="/dashboard" />} />
-    </Routes>
+    <div className="app-container">
+      <Routes>
+        <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
+        <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/create-game" element={<ProtectedRoute><CreateGame /></ProtectedRoute>} />
+        <Route path="/game/:roomCode" element={<ProtectedRoute><GameRoom /></ProtectedRoute>} />
+        <Route path="/local-game" element={<LocalGame />} />
+        <Route path="/how-to-play" element={<HowToPlay />} />
+        <Route path="/" element={<Navigate to="/dashboard" />} />
+      </Routes>
+    </div>
   )
 }
 

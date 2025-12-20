@@ -188,13 +188,25 @@ const Game = sequelize.define('Game', {
     type: DataTypes.BOOLEAN,
     defaultValue: false
   },
-  // ID de categoría si usa personajes predefinidos
+  // ID de categoría si usa personajes predefinidos (legacy, mantener para compatibilidad)
   categoryId: {
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
       model: 'categories',
       key: 'id'
+    }
+  },
+  // IDs de categorías si usa múltiples categorías
+  categoryIds: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const value = this.getDataValue('categoryIds');
+      return value ? JSON.parse(value) : null;
+    },
+    set(value) {
+      this.setDataValue('categoryIds', value ? JSON.stringify(value) : null);
     }
   }
 }, {

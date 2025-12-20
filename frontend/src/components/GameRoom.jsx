@@ -431,21 +431,23 @@ function GameRoom() {
         setGame(response.game);
         socketService.emitGameUpdate(roomCode);
         
-        // Limpiar animación anterior y aplicar slide in para la nueva tarjeta
-        setCardAnimation('');
-        // Usar requestAnimationFrame para asegurar que el DOM se actualice antes de la animación
+        // Aplicar slide in inmediatamente sin limpiar primero para evitar parpadeo
+        // Usar doble requestAnimationFrame para asegurar que el DOM se actualice
         requestAnimationFrame(() => {
-          setTimeout(() => {
+          requestAnimationFrame(() => {
+            // La nueva card ya está renderizada, aplicar animación de entrada
             setCardAnimation('slide-in-left');
-            setTimeout(() => setCardAnimation(''), 400);
-          }, 10);
+            setTimeout(() => {
+              setCardAnimation('');
+            }, 250);
+          });
         });
       } catch (err) {
         console.error('[handleHit] Error:', err);
         setError(err.response?.data?.message || 'Error');
         setCardAnimation(''); // Resetear animación en caso de error
       }
-    }, 400);
+    }, 300);
   };
 
   const handleFail = async () => {
@@ -624,7 +626,15 @@ function GameRoom() {
   const charsPerPlayer = game.charactersPerPlayer || 2;
   const totalCharactersNeeded = usesCategory ? 0 : (game.numPlayers || 4) * charsPerPlayer;
   const myCharacters = currentPlayerId ? playerCharactersData[currentPlayerId] || [] : [];
-  const categoryInfo = game.category;
+  // Obtener información de categoría(es)
+  const categoryInfo = game.category; // Legacy: una sola categoría
+  const categoriesInfo = game.categories; // Array de categorías (múltiples)
+  
+  // Si hay múltiples categorías pero no categoryInfo, crear uno "Variados"
+  const displayCategoryInfo = categoryInfo || (categoriesInfo && categoriesInfo.length > 1 ? {
+    name: 'Variados',
+    icon: '🎲'
+  } : null);
   const playerAvatars = (game && game.playerAvatars) ? game.playerAvatars : {};
   const myAvatar = currentPlayerId && playerAvatars ? playerAvatars[currentPlayerId] : null;
   const needsToSelectAvatar = currentPlayer && !myAvatar && game.status === 'waiting';
@@ -990,6 +1000,22 @@ function GameRoom() {
               <p style={{ color: colors.text, fontSize: '28px', fontWeight: 'bold' }}>{team2Score}</p>
             </div>
           </div>
+
+          <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: `1px solid ${colors.border}` }}>
+            <button
+              onClick={() => setShowExitModal(true)}
+              style={{
+                width: '100%',
+                textAlign: 'center',
+                padding: '8px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ color: colors.textMuted, fontSize: '14px' }}>🚪 Salir del Juego</div>
+            </button>
+          </div>
         </Card>
       </div>
     );
@@ -1042,13 +1068,18 @@ function GameRoom() {
           </div>
 
           {/* Mostrar categoría si se usa */}
-          {usesCategory && categoryInfo && (
+          {usesCategory && displayCategoryInfo && (
             <div style={{ display: 'flex', alignItems: 'center', backgroundColor: `${colors.primary}15`, borderRadius: '12px', padding: '12px', marginBottom: '24px' }}>
-              <span style={{ fontSize: '32px', marginRight: '12px' }}>{categoryInfo.icon}</span>
+              <span style={{ fontSize: '32px', marginRight: '12px' }}>{displayCategoryInfo.icon}</span>
               <div style={{ flex: 1 }}>
                 <p style={{ color: colors.primary, fontSize: '16px', fontWeight: 'bold', margin: 0, textTransform: 'uppercase' }}>
-                  {categoryInfo.name}
+                  {displayCategoryInfo.name}
                 </p>
+                {categoriesInfo && categoriesInfo.length > 1 && (
+                  <p style={{ color: colors.textSecondary, fontSize: '12px', margin: '4px 0 0 0' }}>
+                    {categoriesInfo.map(cat => cat.name).join(', ')}
+                  </p>
+                )}
                 <p style={{ color: colors.textMuted, fontSize: '12px', margin: 0 }}>
                   {game.characters?.length || 0} personajes
                 </p>
@@ -1345,10 +1376,24 @@ function GameRoom() {
                   </div>
                 </div>
               </div>
-              <div className="card-face card-front">
+              <div className="card-face card-front" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 <div className="character-name">
                   {currentCharacter?.toUpperCase() || 'SIN TARJETAS'}
                 </div>
+                {currentCharacter && game?.characterCategories && game.characterCategories[currentCharacter] && (
+                  <div style={{ 
+                    fontSize: '20px', 
+                    color: '#ffffff', 
+                    marginTop: '12px',
+                    fontWeight: '500',
+                    textTransform: 'none',
+                    textAlign: 'center',
+                    textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)',
+                    fontFamily: "'Truculenta', sans-serif"
+                  }}>
+                    ({game.characterCategories[currentCharacter].name})
+                  </div>
+                )}
               </div>
             </div>
           ) : (

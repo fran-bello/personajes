@@ -213,7 +213,7 @@ function Characters() {
         </span>
         {characters.length < 10 && (
           <span style={{ color: colors.warning, fontSize: '12px' }}>
-            Necesitas al menos 10 para jugar online
+            Necesitas al menos 10 para jugar con múltiples dispositivos
           </span>
         )}
       </div>

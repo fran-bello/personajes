@@ -1,4 +1,5 @@
 const express = require('express');
+const { Op } = require('sequelize');
 const Game = require('../models/Game');
 const User = require('../models/User');
 const { Category, Character } = require('../models');
@@ -175,9 +176,52 @@ const formatGame = async (game, req = null) => {
     filteredPlayerCharacters[req.user.id] = playerCharacters[req.user.id] || [];
   }
 
-  // Obtener información de la categoría si existe
+  // Obtener información de las categorías si existen
   let categoryInfo = null;
-  if (game.categoryId) {
+  let categoriesInfo = null;
+  
+  // Manejar categoryIds (múltiples categorías)
+  if (game.categoryIds && Array.isArray(game.categoryIds) && game.categoryIds.length > 0) {
+    const categories = await Category.findAll({
+      where: { id: game.categoryIds },
+      attributes: ['id', 'name', 'icon']
+    });
+    if (categories.length > 0) {
+      if (categories.length === 1) {
+        // Si solo hay una categoría, establecer categoryInfo
+        categoryInfo = {
+          id: categories[0].id,
+          name: categories[0].name,
+          icon: categories[0].icon
+        };
+        categoriesInfo = [categoryInfo];
+      } else {
+        // Si hay múltiples categorías, crear un categoryInfo "Variados"
+        categoriesInfo = categories.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          icon: cat.icon
+        }));
+        categoryInfo = {
+          id: null,
+          name: 'Variados',
+          icon: '🎲'
+        };
+      }
+    }
+  } 
+  // Si categoryIds es null pero se usó categoría (useAllCategories), mostrar "Variados"
+  else if (game.charactersPerPlayer === 0 && !game.categoryId && !game.categoryIds) {
+    // Esto significa que se usaron todas las categorías
+    categoryInfo = {
+      id: null,
+      name: 'Variados',
+      icon: '🎲'
+    };
+    categoriesInfo = null; // No hay categorías específicas
+  }
+  // Legacy: manejar categoryId (una sola categoría)
+  else if (game.categoryId) {
     const category = await Category.findByPk(game.categoryId, {
       attributes: ['id', 'name', 'icon']
     });
@@ -187,10 +231,64 @@ const formatGame = async (game, req = null) => {
         name: category.name,
         icon: category.icon
       };
+      categoriesInfo = [categoryInfo];
     }
   }
 
-  const usesCategory = game.categoryId != null || game.charactersPerPlayer === 0;
+  const usesCategory = (game.categoryId != null || (game.categoryIds && game.categoryIds.length > 0)) || game.charactersPerPlayer === 0;
+
+  // Crear mapeo de personajes a categorías para mostrar en la UI
+  let characterCategories = {};
+  if (usesCategory) {
+    // Obtener todas las categorías relevantes con sus personajes
+    let categoriesToCheck = [];
+    
+    if (game.categoryIds && Array.isArray(game.categoryIds) && game.categoryIds.length > 0) {
+      // Obtener las categorías específicas seleccionadas
+      categoriesToCheck = await Category.findAll({
+        where: { id: game.categoryIds },
+        include: [{
+          model: Character,
+          as: 'characters',
+          attributes: ['name']
+        }]
+      });
+    } else if (game.categoryId) {
+      // Legacy: una sola categoría
+      const category = await Category.findByPk(game.categoryId, {
+        include: [{
+          model: Character,
+          as: 'characters',
+          attributes: ['name']
+        }]
+      });
+      if (category) {
+        categoriesToCheck = [category];
+      }
+    } else if (game.charactersPerPlayer === 0 && !game.categoryId && !game.categoryIds) {
+      // Variados: todas las categorías activas
+      categoriesToCheck = await Category.findAll({
+        where: { isActive: true },
+        include: [{
+          model: Character,
+          as: 'characters',
+          attributes: ['name']
+        }]
+      });
+    }
+    
+    // Crear mapeo de personaje -> categoría
+    for (const category of categoriesToCheck) {
+      if (category.characters && category.characters.length > 0) {
+        for (const character of category.characters) {
+          characterCategories[character.name] = {
+            name: category.name,
+            icon: category.icon
+          };
+        }
+      }
+    }
+  }
 
   // Obtener avatar del host (ya está en el objeto host)
   const hostAvatar = host ? host.avatar : null;
@@ -214,15 +312,17 @@ const formatGame = async (game, req = null) => {
     showingRoundIntro: gameData.showingRoundIntro || false,
     showingRoundIntroMidTurn: gameData.showingRoundIntroMidTurn || false,
     currentPlayerIndex: gameData.currentPlayerIndex || 0,
-    category: categoryInfo,
-    usesCategory: usesCategory
+    category: categoryInfo, // Legacy: para compatibilidad
+    categories: categoriesInfo, // Array de categorías seleccionadas
+    usesCategory: usesCategory,
+    characterCategories: characterCategories // Mapeo de personaje -> categoría
   };
 };
 
 // Crear nueva partida
 router.post('/create', auth, async (req, res) => {
   try {
-    const { characters, timePerRound, numPlayers, gameMode, charactersPerPlayer, categoryId, maxCharacters, avatar } = req.body;
+    const { characters, timePerRound, numPlayers, gameMode, charactersPerPlayer, categoryId, categoryIds, maxCharacters, avatar, useAllCategories } = req.body;
 
     // Validar número de jugadores
     if (!numPlayers || numPlayers < 2) {
@@ -239,26 +339,68 @@ router.post('/create', auth, async (req, res) => {
       playerAvatars[req.user.id] = avatar;
     }
 
-    // Si se proporciona categoryId, usar personajes de la categoría
-    if (categoryId) {
-      const category = await Category.findByPk(categoryId, {
-        include: [{
-          model: Character,
-          as: 'characters',
-          attributes: ['name']
-        }]
-      });
+    // Si se proporciona useAllCategories=true, usar personajes de TODAS las categorías activas
+    // Si se proporciona categoryIds (array) o categoryId (legacy), usar personajes de las categorías seleccionadas
+    const categoryIdsToUse = useAllCategories 
+      ? null // No usar IDs específicos cuando se quiere todas las categorías
+      : (categoryIds && Array.isArray(categoryIds) && categoryIds.length > 0 
+          ? categoryIds 
+          : (categoryId ? [categoryId] : null));
+    
+    if (useAllCategories || (categoryIdsToUse && categoryIdsToUse.length > 0)) {
+      let allCharacters = [];
+      
+      if (useAllCategories) {
+        // Obtener personajes de TODAS las categorías activas
+        const allCategories = await Category.findAll({
+          where: { isActive: true },
+          include: [{
+            model: Character,
+            as: 'characters',
+            attributes: ['name']
+          }]
+        });
+        
+        // Combinar todos los personajes de todas las categorías activas
+        for (const category of allCategories) {
+          if (category.characters && category.characters.length > 0) {
+            const categoryChars = category.characters.map(c => c.name);
+            allCharacters = allCharacters.concat(categoryChars);
+          }
+        }
+      } else {
+        // Validar que todas las categorías existan
+        const categories = await Category.findAll({
+          where: { id: categoryIdsToUse },
+          include: [{
+            model: Character,
+            as: 'characters',
+            attributes: ['name']
+          }]
+        });
 
-      if (!category) {
-        return res.status(404).json({ message: 'Categoría no encontrada' });
+        if (categories.length !== categoryIdsToUse.length) {
+          return res.status(404).json({ message: 'Una o más categorías no fueron encontradas' });
+        }
+
+        // Validar que todas las categorías tengan suficientes personajes
+        for (const category of categories) {
+          if (!category.characters || category.characters.length < 10) {
+            return res.status(400).json({ 
+              message: `La categoría "${category.name}" no tiene suficientes personajes (mínimo 10)` 
+            });
+          }
+        }
+
+        // Combinar todos los personajes de todas las categorías seleccionadas
+        for (const category of categories) {
+          const categoryChars = category.characters.map(c => c.name);
+          allCharacters = allCharacters.concat(categoryChars);
+        }
       }
-
-      if (!category.characters || category.characters.length < 10) {
-        return res.status(400).json({ message: 'La categoría no tiene suficientes personajes (mínimo 10)' });
-      }
-
-      // Obtener todos los personajes de la categoría
-      let allCharacters = category.characters.map(c => c.name);
+      
+      // Eliminar duplicados (por si hay personajes repetidos entre categorías)
+      allCharacters = [...new Set(allCharacters)];
       
       // Calcular cuántos personajes se necesitan
       const charsPerPlayer = charactersPerPlayer || 2;
@@ -274,7 +416,7 @@ router.post('/create', auth, async (req, res) => {
         }
         if (maxChars > allCharacters.length) {
           return res.status(400).json({ 
-            message: `El límite no puede exceder ${allCharacters.length} personajes (total de la categoría)` 
+            message: `El límite no puede exceder ${allCharacters.length} personajes (total combinado de las categorías seleccionadas)` 
           });
         }
         limitToUse = maxChars;
@@ -285,7 +427,7 @@ router.post('/create', auth, async (req, res) => {
         // Validar que el cálculo automático no exceda el total disponible
         if (limitToUse > allCharacters.length) {
           return res.status(400).json({ 
-            message: `Se necesitan ${limitToUse} personajes (${numPlayers} jugadores × ${charsPerPlayer} por jugador), pero la categoría solo tiene ${allCharacters.length} personajes disponibles` 
+            message: `Se necesitan ${limitToUse} personajes (${numPlayers} jugadores × ${charsPerPlayer} por jugador), pero las categorías seleccionadas solo tienen ${allCharacters.length} personajes disponibles en total` 
           });
         }
       }
@@ -347,7 +489,8 @@ router.post('/create', auth, async (req, res) => {
       numPlayers: numPlayers,
       gameMode: gameMode || 'teams',
       charactersPerPlayer: useCategory ? 0 : (charactersPerPlayer || 2), // 0 significa que usa categoría
-      categoryId: categoryId || null,
+      categoryId: useAllCategories ? null : (categoryIdsToUse && categoryIdsToUse.length === 1 ? categoryIdsToUse[0] : null), // Legacy: solo si es una categoría
+      categoryIds: useAllCategories ? null : (categoryIdsToUse && categoryIdsToUse.length > 0 ? categoryIdsToUse : null),
       timePerRound: timePerRound || 60,
       timer: {
         timeLeft: timePerRound || 60,

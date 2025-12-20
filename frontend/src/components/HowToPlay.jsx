@@ -138,7 +138,7 @@ function HowToPlay() {
           <div className="modes-grid">
             <div className="mode-card">
               <div className="mode-icon">🌐</div>
-              <h3>Partida Online</h3>
+              <h3>Múltiples Dispositivos</h3>
               <p>Juega con amigos desde diferentes dispositivos. Crea una sala y comparte el código para que otros se unan.</p>
               <ul>
                 <li>Crea una partida y obtén un código de sala</li>
@@ -148,7 +148,7 @@ function HowToPlay() {
             </div>
             <div className="mode-card">
               <div className="mode-icon">📱</div>
-              <h3>Juego Local</h3>
+              <h3>Un Solo Dispositivo</h3>
               <p>Juega en un solo dispositivo pasándolo por turnos. Perfecto para reuniones presenciales.</p>
               <ul>
                 <li>Un solo dispositivo para todos</li>

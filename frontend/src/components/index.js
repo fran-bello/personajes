@@ -1,6 +1,7 @@
 export { Button } from './Button';
 export { Card, ActionCard } from './Card';
 export { Input } from './Input';
+export { InputOverlay } from './InputOverlay';
 export { default as Modal } from './Modal';
 export { default as Toast } from './Toast';
 export { default as LoadingDots } from './LoadingDots';

@@ -59,14 +59,14 @@ function Dashboard() {
 
       <ActionCard
         icon="🌐"
-        title="Partida Online"
+        title="Múltiples Dispositivos"
         description="Crea una partida y comparte el código con tus amigos"
         onClick={() => navigate('/create-game')}
       />
 
       <ActionCard
         icon="📱"
-        title="Juego Local"
+        title="Un Solo Dispositivo"
         description="Juega en un solo dispositivo pasándolo por turnos"
         onClick={() => navigate('/local-game')}
       />

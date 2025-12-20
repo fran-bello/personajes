@@ -24,7 +24,8 @@ function CreateGame() {
   // Estado para categorías
   const [useCategory, setUseCategory] = useState(false);
   const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCategories, setSelectedCategories] = useState([]); // Array de IDs de categorías seleccionadas
+  const [useAllCategories, setUseAllCategories] = useState(false); // Flag para usar todas las categorías (Variados)
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const [maxCharacters, setMaxCharacters] = useState('');
@@ -80,9 +81,23 @@ function CreateGame() {
   const handleCreate = async () => {
     // Validaciones según el modo
     if (useCategory) {
-      if (!selectedCategory) {
-        setError('Selecciona una categoría');
+      // Verificar si se puede crear el juego: debe tener Variados activo O categorías seleccionadas
+      const canCreate = useAllCategories || (selectedCategories && selectedCategories.length > 0);
+      
+      if (!canCreate) {
+        setError('Selecciona al menos una categoría o activa "Variados"');
         return;
+      }
+      
+      // Calcular total de personajes disponibles
+      let totalCharactersAvailable;
+      if (useAllCategories) {
+        // Si usa todas las categorías, sumar todas
+        totalCharactersAvailable = categories.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+      } else {
+        // Si usa categorías seleccionadas, sumar solo esas
+        const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+        totalCharactersAvailable = selectedCats.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
       }
       
       // Validar límite de personajes si se especifica
@@ -92,8 +107,8 @@ function CreateGame() {
           setError('El límite de personajes debe ser un número mayor a 0');
           return;
         }
-        if (maxChars > selectedCategory.characterCount) {
-          setError(`El límite no puede exceder ${selectedCategory.characterCount} personajes (total de la categoría)`);
+        if (maxChars > totalCharactersAvailable) {
+          setError(`El límite no puede exceder ${totalCharactersAvailable} personajes (total combinado de las categorías seleccionadas)`);
           return;
         }
       }
@@ -124,8 +139,18 @@ function CreateGame() {
         avatar: selectedAvatar,
       };
 
-      if (useCategory && selectedCategory) {
-        gameData.categoryId = selectedCategory.id;
+      if (useCategory) {
+        if (useAllCategories) {
+          // Usar todas las categorías (Variados)
+          gameData.useAllCategories = true;
+        } else if (selectedCategories.length > 0) {
+          // Usar categorías seleccionadas
+          gameData.categoryIds = selectedCategories; // Enviar array de IDs
+          // También enviar categoryId para compatibilidad si solo hay una categoría
+          if (selectedCategories.length === 1) {
+            gameData.categoryId = selectedCategories[0];
+          }
+        }
         gameData.charactersPerPlayer = parseInt(charactersPerPlayer) || 2;
         if (maxCharacters) {
           gameData.maxCharacters = parseInt(maxCharacters);
@@ -212,7 +237,7 @@ function CreateGame() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '28px' }}>🎮</span>
           <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0, textTransform: 'uppercase' }}>
-            Partida Online
+            Múltiples Dispositivos
           </h1>
         </div>
         <Button title="Volver" onClick={() => navigate('/dashboard')} variant="secondary" size="small" />
@@ -267,7 +292,8 @@ function CreateGame() {
                 }}
                 onClick={() => {
                   setUseCategory(false);
-                  setSelectedCategory(null);
+                  setSelectedCategories([]);
+                  setUseAllCategories(false);
                   setCategorySearch('');
                   setMaxCharacters('');
                 }}
@@ -299,6 +325,59 @@ function CreateGame() {
                 Selecciona categoría
               </label>
               
+              {/* Opción Variados */}
+              <div
+                style={{
+                  backgroundColor: useAllCategories ? colors.primary : colors.surfaceLight,
+                  borderRadius: '12px',
+                  padding: '16px',
+                  marginBottom: '12px',
+                  cursor: 'pointer',
+                  border: `2px solid ${useAllCategories ? colors.primary : 'transparent'}`,
+                  transition: 'all 0.2s'
+                }}
+                onClick={() => {
+                  setUseAllCategories(!useAllCategories);
+                  if (!useAllCategories) {
+                    // Al activar Variados, limpiar selección de categorías
+                    setSelectedCategories([]);
+                  }
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '6px',
+                    border: `2px solid ${useAllCategories ? colors.text : colors.textMuted}`,
+                    backgroundColor: useAllCategories ? colors.text : 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    color: useAllCategories ? colors.primary : colors.textMuted
+                  }}>
+                    {useAllCategories && '✓'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ 
+                      fontSize: '18px', 
+                      fontWeight: 'bold', 
+                      color: useAllCategories ? colors.text : colors.textMuted,
+                      marginBottom: '4px'
+                    }}>
+                      🎲 Variados
+                    </div>
+                    <div style={{ 
+                      fontSize: '12px', 
+                      color: useAllCategories ? colors.textSecondary : colors.textMuted 
+                    }}>
+                      Personajes aleatorios de todas las categorías
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
               {/* Buscador de categorías */}
               {categories.length > 0 && (
                 <Input
@@ -309,50 +388,127 @@ function CreateGame() {
                 />
               )}
               
-              {loadingCategories ? (
+              {!useAllCategories && loadingCategories ? (
                 <div style={{ textAlign: 'center', padding: '16px', color: colors.textMuted }}>
                   Cargando categorías...
                 </div>
-              ) : categories.length === 0 ? (
+              ) : !useAllCategories && categories.length === 0 ? (
                 <div style={{ backgroundColor: colors.surfaceLight, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
                   <p style={{ color: colors.textMuted, marginBottom: '12px' }}>No hay categorías disponibles</p>
                   <Button title="🔄 Reintentar" onClick={loadCategories} variant="outline" size="small" />
                 </div>
-              ) : filteredCategories.length === 0 ? (
+              ) : !useAllCategories && filteredCategories.length === 0 ? (
                 <div style={{ backgroundColor: colors.surfaceLight, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
                   <p style={{ color: colors.textMuted, marginBottom: '12px' }}>No se encontraron categorías</p>
                   <Button title="Limpiar búsqueda" onClick={() => setCategorySearch('')} variant="outline" size="small" />
                 </div>
-              ) : (
+              ) : !useAllCategories ? (
                 <div className="categories-grid">
-                  {filteredCategories.map((cat) => (
-                    <div
-                      key={cat.id}
-                      className={`category-card ${selectedCategory?.id === cat.id ? 'selected' : ''}`}
-                      onClick={() => {
-                        setSelectedCategory(cat);
-                        setMaxCharacters('');
-                      }}
-                    >
-                      <div className="category-icon">{cat.icon}</div>
-                      <div className="category-name">{cat.name}</div>
-                      <div className="category-count">{cat.characterCount} pers.</div>
-                    </div>
-                  ))}
+                  {filteredCategories.map((cat) => {
+                    const isSelected = selectedCategories.includes(cat.id);
+                    return (
+                      <div
+                        key={cat.id}
+                        className={`category-card ${isSelected ? 'selected' : ''}`}
+                        onClick={() => {
+                          if (isSelected) {
+                            // Deseleccionar
+                            setSelectedCategories(selectedCategories.filter(id => id !== cat.id));
+                          } else {
+                            // Seleccionar
+                            setSelectedCategories([...selectedCategories, cat.id]);
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: '8px', 
+                          right: '8px',
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '4px',
+                          border: `2px solid ${isSelected ? colors.primary : colors.textMuted}`,
+                          backgroundColor: isSelected ? colors.primary : 'transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px'
+                        }}>
+                          {isSelected && '✓'}
+                        </div>
+                        <div className="category-icon">{cat.icon}</div>
+                        <div className="category-name">{cat.name}</div>
+                        <div className="category-count">{cat.characterCount} pers.</div>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+              ) : null}
 
-              {selectedCategory && (
+              {(useAllCategories || selectedCategories.length > 0) && (
                 <div style={{ backgroundColor: colors.surfaceLight, borderRadius: '12px', padding: '12px', marginTop: '8px' }}>
-                  <h3 style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', marginBottom: '4px' }}>
-                    {selectedCategory.icon} {selectedCategory.name}
-                  </h3>
-                  <p style={{ color: colors.textSecondary, fontSize: '13px', marginBottom: '4px' }}>
-                    {selectedCategory.description}
-                  </p>
-                  <p style={{ color: colors.success, fontSize: '12px', fontWeight: '500' }}>
-                    ✅ {selectedCategory.characterCount} personajes disponibles
-                  </p>
+                  {!useAllCategories && selectedCategories.length > 0 && (
+                    <>
+                      <h3 style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>
+                        📚 Categorías Seleccionadas ({selectedCategories.length})
+                      </h3>
+                      <div style={{ marginBottom: '12px' }}>
+                        {selectedCategories.map(catId => {
+                          const cat = categories.find(c => c.id === catId);
+                          if (!cat) return null;
+                          return (
+                            <div key={catId} style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '8px',
+                              marginBottom: '6px',
+                              padding: '6px',
+                              backgroundColor: colors.surface,
+                              borderRadius: '8px'
+                            }}>
+                              <span style={{ fontSize: '20px' }}>{cat.icon}</span>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ color: colors.text, fontSize: '14px', fontWeight: '500' }}>{cat.name}</div>
+                                <div style={{ color: colors.textMuted, fontSize: '12px' }}>{cat.characterCount} personajes</div>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedCategories(selectedCategories.filter(id => id !== catId));
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: colors.textMuted,
+                                  cursor: 'pointer',
+                                  fontSize: '18px',
+                                  padding: '4px'
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                  
+                  {(() => {
+                    let totalChars;
+                    if (useAllCategories) {
+                      totalChars = categories.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                    } else {
+                      const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+                      totalChars = selectedCats.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                    }
+                    return (
+                      <p style={{ color: colors.success, fontSize: '12px', fontWeight: '500', marginBottom: '12px' }}>
+                        ✅ {totalChars} personajes disponibles en total
+                      </p>
+                    );
+                  })()}
                   
                   {/* Input para limitar personajes */}
                   <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${colors.border}` }}>
@@ -361,11 +517,18 @@ function CreateGame() {
                       value={maxCharacters}
                       onChange={(val) => handleNumericInput(val, setMaxCharacters)}
                       type="number"
-                      placeholder={`Máximo: ${selectedCategory.characterCount}`}
+                      placeholder={`Máximo: ${(() => {
+                        if (useAllCategories) {
+                          return categories.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                        } else {
+                          const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+                          return selectedCats.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                        }
+                      })()}`}
                     />
                     <p style={{ color: colors.textMuted, fontSize: '11px', marginTop: '4px' }}>
                       {maxCharacters 
-                        ? `Se usarán ${Math.min(parseInt(maxCharacters) || 0, selectedCategory.characterCount)} personajes (límite manual)`
+                        ? `Se usarán ${parseInt(maxCharacters) || 0} personajes (límite manual)`
                         : `Se usarán ${totalCharactersNeeded} personajes (calculado automáticamente: ${numPlayers} jugadores × ${charactersPerPlayer} por jugador)`
                       }
                     </p>
@@ -436,7 +599,7 @@ function CreateGame() {
             type="number"
             placeholder="2"
           />
-          {useCategory && selectedCategory && (
+              {useCategory && (useAllCategories || selectedCategories.length > 0) && (
             <p style={{ color: colors.textMuted, fontSize: '12px', marginTop: '-8px', marginBottom: '16px' }}>
               Total de personajes: {totalCharactersNeeded} ({charactersPerPlayer} por jugador × {numPlayers} jugadores)
             </p>
@@ -479,7 +642,11 @@ function CreateGame() {
             title={loading ? 'Creando...' : 'Crear Partida'}
             onClick={handleCreate}
             loading={loading}
-            disabled={loading || (useCategory && !selectedCategory)}
+            disabled={
+              loading || 
+              (useCategory && !useAllCategories && (!selectedCategories || selectedCategories.length === 0)) ||
+              (!useCategory && (!characters || characters.every(c => !c.trim())))
+            }
             size="large"
             style={{ width: '100%', marginTop: '16px' }}
           />

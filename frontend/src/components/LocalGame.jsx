@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, Card, Modal } from './index';
 import { colors } from '../theme';
-import { OFFLINE_CATEGORIES, getCategoryById, getCategoriesForUI, LOCAL_AVATARS } from '../data/categories';
+import { api } from '../services/api';
+import { OFFLINE_CATEGORIES, getCategoryById, LOCAL_AVATARS } from '../data/categories';
 import './LocalGame.css';
 
 const timeOptions = [30, 60, 90, 120, 150, 180];
@@ -43,9 +44,12 @@ function LocalGame() {
   const [timePerRound, setTimePerRound] = useState('60');
   const [category, setCategory] = useState('');
   const [usePresetCategory, setUsePresetCategory] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCategories, setSelectedCategories] = useState([]); // Array de IDs de categorías seleccionadas
+  const [useAllCategories, setUseAllCategories] = useState(false); // Flag para usar todas las categorías (Variados)
   const [maxCharacters, setMaxCharacters] = useState('');
-  const categories = getCategoriesForUI();
+  const [categories, setCategories] = useState([]);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [loadingCategories, setLoadingCategories] = useState(false);
   const [players, setPlayers] = useState([]);
   const [roundPlayerIndex, setRoundPlayerIndex] = useState(0);
   const [globalPlayerIndex, setGlobalPlayerIndex] = useState(0); // Índice global para alternar entre equipos
@@ -82,6 +86,58 @@ function LocalGame() {
   const [cardAnimation, setCardAnimation] = useState('');
   const [buttonAnimation, setButtonAnimation] = useState({ hit: false, fail: false });
 
+  // Cargar categorías al activar el modo categoría
+  useEffect(() => {
+    if (usePresetCategory && categories.length === 0) {
+      loadCategories();
+    }
+  }, [usePresetCategory]);
+
+  const loadCategories = async () => {
+    setLoadingCategories(true);
+    try {
+      const data = await api.getCategories();
+      // Obtener los personajes de cada categoría
+      const categoriesWithCharacters = await Promise.all(
+        data.map(async (cat) => {
+          try {
+            const categoryData = await api.getCategory(cat.id);
+            return {
+              ...cat,
+              characters: categoryData.characters || []
+            };
+          } catch (err) {
+            console.error(`Error loading characters for category ${cat.id}:`, err);
+            return {
+              ...cat,
+              characters: []
+            };
+          }
+        })
+      );
+      setCategories(categoriesWithCharacters);
+    } catch (err) {
+      console.error('Error loading categories:', err);
+      // Si falla, usar categorías offline como fallback
+      setCategories(OFFLINE_CATEGORIES.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        description: cat.description,
+        icon: cat.icon,
+        characterCount: cat.characters.length,
+        characters: cat.characters
+      })));
+    } finally {
+      setLoadingCategories(false);
+    }
+  };
+
+  // Filtrar categorías según búsqueda
+  const filteredCategories = categories.filter(cat => 
+    cat.name.toLowerCase().includes(categorySearch.toLowerCase()) ||
+    (cat.description && cat.description.toLowerCase().includes(categorySearch.toLowerCase()))
+  );
+
   // Validar que solo se ingresen números enteros
   const handleNumericInput = (value, setter) => {
     const numericValue = value.replace(/[^0-9]/g, '');
@@ -92,6 +148,22 @@ function LocalGame() {
     return text.split(' ').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     ).join(' ');
+  };
+
+  // Función helper para obtener la categoría de un personaje
+  const getCharacterCategory = (characterName) => {
+    if (!characterName || !usePresetCategory) return null;
+    
+    // Buscar en todas las categorías del estado
+    for (const category of categories) {
+      if (category.characters && Array.isArray(category.characters) && category.characters.includes(characterName)) {
+        return {
+          name: category.name,
+          icon: category.icon
+        };
+      }
+    }
+    return null;
   };
 
   const handleExit = () => {
@@ -118,11 +190,13 @@ function LocalGame() {
     setPlayerCharacters(Array(parseInt(charactersPerPlayer) || 2).fill(''));
   }, [charactersPerPlayer]);
 
-  const selectCategory = (categoryId) => {
-    const category = getCategoryById(categoryId);
-    if (category) {
-      setSelectedCategory(category);
-      setMaxCharacters('');
+  const toggleCategory = (categoryId) => {
+    if (selectedCategories.includes(categoryId)) {
+      // Deseleccionar
+      setSelectedCategories(selectedCategories.filter(id => id !== categoryId));
+    } else {
+      // Seleccionar
+      setSelectedCategories([...selectedCategories, categoryId]);
     }
   };
 
@@ -145,13 +219,36 @@ function LocalGame() {
       return;
     }
 
-    if (usePresetCategory && !selectedCategory) {
-      alert('Selecciona una categoría predefinida');
+    if (usePresetCategory && !useAllCategories && selectedCategories.length === 0) {
+      alert('Selecciona al menos una categoría predefinida o activa "Variados"');
       return;
     }
 
-    if (usePresetCategory && selectedCategory?.characters) {
-      let categoryChars = [...selectedCategory.characters];
+    if (usePresetCategory && (useAllCategories || selectedCategories.length > 0)) {
+      let allCharacters = [];
+      
+      if (useAllCategories) {
+        // Obtener personajes de TODAS las categorías del servidor
+        for (const cat of categories) {
+          if (cat.characters) {
+            allCharacters = allCharacters.concat(cat.characters);
+          }
+        }
+      } else {
+        // Obtener todas las categorías seleccionadas
+        const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+        
+        // Combinar todos los personajes de todas las categorías seleccionadas
+        for (const cat of selectedCats) {
+          if (cat.characters) {
+            allCharacters = allCharacters.concat(cat.characters);
+          }
+        }
+      }
+      
+      // Eliminar duplicados
+      allCharacters = [...new Set(allCharacters)];
+      
       const charsPerPlayer = parseInt(charactersPerPlayer) || 2;
       const calculatedMax = numPlayersInt * charsPerPlayer;
       
@@ -162,24 +259,31 @@ function LocalGame() {
           alert('El límite de personajes debe ser un número mayor a 0');
           return;
         }
-        if (maxChars > categoryChars.length) {
-          alert(`El límite no puede exceder ${categoryChars.length} personajes (total de la categoría)`);
+        if (maxChars > allCharacters.length) {
+          alert(`El límite no puede exceder ${allCharacters.length} personajes (total combinado de las categorías seleccionadas)`);
           return;
         }
         limitToUse = maxChars;
       } else {
         limitToUse = calculatedMax;
-        if (limitToUse > categoryChars.length) {
-          alert(`Se necesitan ${limitToUse} personajes (${numPlayersInt} jugadores × ${charsPerPlayer} por jugador), pero la categoría solo tiene ${categoryChars.length} personajes disponibles`);
+        if (limitToUse > allCharacters.length) {
+          alert(`Se necesitan ${limitToUse} personajes (${numPlayersInt} jugadores × ${charsPerPlayer} por jugador), pero las categorías seleccionadas solo tienen ${allCharacters.length} personajes disponibles en total`);
           return;
         }
       }
       
-      categoryChars = shuffleArray(categoryChars);
-      categoryChars = categoryChars.slice(0, limitToUse);
+      allCharacters = shuffleArray(allCharacters);
+      allCharacters = allCharacters.slice(0, limitToUse);
       
-      setCharacters(categoryChars);
-      setCategory(selectedCategory.name);
+      setCharacters(allCharacters);
+      // Mostrar nombres de categorías separados por comas
+      if (useAllCategories) {
+        setCategory('Variados');
+      } else {
+        const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+        const categoryNames = selectedCats.map(cat => cat.name).join(', ');
+        setCategory(categoryNames);
+      }
     }
 
     setGameState('setup');
@@ -542,16 +646,18 @@ function LocalGame() {
       
       advanceAfterHit();
       
-      // Limpiar animación anterior y aplicar slide in para la nueva tarjeta
-      setCardAnimation('');
-      // Usar requestAnimationFrame para asegurar que el DOM se actualice antes de la animación
+      // Aplicar slide in inmediatamente sin limpiar primero para evitar parpadeo
+      // Usar doble requestAnimationFrame para asegurar que el DOM se actualice
       requestAnimationFrame(() => {
-        setTimeout(() => {
+        requestAnimationFrame(() => {
+          // La nueva card ya está renderizada, aplicar animación de entrada
           setCardAnimation('slide-in-left');
-          setTimeout(() => setCardAnimation(''), 400);
-        }, 10);
+          setTimeout(() => {
+            setCardAnimation('');
+          }, 250);
+        });
       });
-    }, 400);
+    }, 300);
   };
 
   const handlePlayerReady = () => {
@@ -605,7 +711,7 @@ function LocalGame() {
     setIsCardPressed(false);
     setCategory('');
     setUsePresetCategory(false);
-    setSelectedCategory(null);
+    setSelectedCategories([]);
   };
 
   const playAgain = () => {
@@ -638,13 +744,36 @@ function LocalGame() {
     
     setNumPlayers(numPlayersInt.toString());
 
-    if (usePresetCategory && !selectedCategory) {
-      alert('Selecciona una categoría predefinida');
+    if (usePresetCategory && !useAllCategories && selectedCategories.length === 0) {
+      alert('Selecciona al menos una categoría predefinida o activa "Variados"');
       return;
     }
 
-    if (usePresetCategory && selectedCategory?.characters) {
-      let categoryChars = [...selectedCategory.characters];
+    if (usePresetCategory && (useAllCategories || selectedCategories.length > 0)) {
+      let allCharacters = [];
+      
+      if (useAllCategories) {
+        // Obtener personajes de TODAS las categorías del servidor
+        for (const cat of categories) {
+          if (cat.characters) {
+            allCharacters = allCharacters.concat(cat.characters);
+          }
+        }
+      } else {
+        // Obtener todas las categorías seleccionadas
+        const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+        
+        // Combinar todos los personajes de todas las categorías seleccionadas
+        for (const cat of selectedCats) {
+          if (cat.characters) {
+            allCharacters = allCharacters.concat(cat.characters);
+          }
+        }
+      }
+      
+      // Eliminar duplicados
+      allCharacters = [...new Set(allCharacters)];
+      
       const charsPerPlayer = parseInt(charactersPerPlayer) || 2;
       const calculatedMax = numPlayersInt * charsPerPlayer;
       
@@ -655,27 +784,34 @@ function LocalGame() {
           alert('El límite de personajes debe ser un número mayor a 0');
           return;
         }
-        if (maxChars > categoryChars.length) {
-          alert(`El límite no puede exceder ${categoryChars.length} personajes (total de la categoría)`);
+        if (maxChars > allCharacters.length) {
+          alert(`El límite no puede exceder ${allCharacters.length} personajes (total combinado de las categorías seleccionadas)`);
           return;
         }
         limitToUse = maxChars;
       } else {
         limitToUse = calculatedMax;
-        if (limitToUse > categoryChars.length) {
-          alert(`Se necesitan ${limitToUse} personajes (${numPlayersInt} jugadores × ${charsPerPlayer} por jugador), pero la categoría solo tiene ${categoryChars.length} personajes disponibles`);
+        if (limitToUse > allCharacters.length) {
+          alert(`Se necesitan ${limitToUse} personajes (${numPlayersInt} jugadores × ${charsPerPlayer} por jugador), pero las categorías seleccionadas solo tienen ${allCharacters.length} personajes disponibles en total`);
           return;
         }
       }
       
-      categoryChars = shuffleArray(categoryChars);
-      categoryChars = categoryChars.slice(0, limitToUse);
+      allCharacters = shuffleArray(allCharacters);
+      allCharacters = allCharacters.slice(0, limitToUse);
       
-      setCharacters(categoryChars);
-      setCategory(selectedCategory.name);
+      setCharacters(allCharacters);
+      // Mostrar nombres de categorías separados por comas
+      if (useAllCategories) {
+        setCategory('Variados');
+      } else {
+        const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+        const categoryNames = selectedCats.map(cat => cat.name).join(', ');
+        setCategory(categoryNames);
+      }
       
-      setRoundCharacters(categoryChars);
-      setCurrentCharacter(pickRandomCharacter(categoryChars, []));
+      setRoundCharacters(allCharacters);
+      setCurrentCharacter(pickRandomCharacter(allCharacters, []));
       setIsPaused(true);
       setTimeLeft(parseInt(timePerRound) || 60);
       setGameState('round_intro');
@@ -835,7 +971,7 @@ function LocalGame() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <span style={{ fontSize: '28px' }}>🎮</span>
-              <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0, textTransform: 'uppercase' }}>Juego Local</h1>
+              <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0, textTransform: 'uppercase' }}>Un Solo Dispositivo</h1>
             </div>
             <Button title="Volver" onClick={() => navigate('/dashboard')} variant="secondary" size="small" />
           </div>
@@ -927,7 +1063,7 @@ function LocalGame() {
               <button
                 onClick={() => {
                   setUsePresetCategory(false);
-                  setSelectedCategory(null);
+                  setSelectedCategories([]);
                   setMaxCharacters('');
                 }}
                 style={{
@@ -976,40 +1112,205 @@ function LocalGame() {
               </>
             ) : (
               <div style={{ marginTop: '8px' }}>
-                <p style={{ color: colors.textSecondary, fontSize: '12px', marginBottom: '8px' }}>Selecciona una categoría:</p>
-                <div className="categories-grid">
-                  {categories.map((cat) => (
-                    <div
-                      key={cat.id}
-                      onClick={() => selectCategory(cat.id)}
-                      className={`category-card ${selectedCategory?.id === cat.id ? 'selected' : ''}`}
-                    >
-                      <div className="category-icon">{cat.icon}</div>
-                      <div className="category-name">{cat.name}</div>
-                      <div className="category-count">{cat.characterCount} personajes</div>
+                <p style={{ color: colors.textSecondary, fontSize: '12px', marginBottom: '8px' }}>Selecciona una o más categorías:</p>
+                
+                {/* Opción Variados */}
+                <div
+                  style={{
+                    backgroundColor: useAllCategories ? colors.primary : colors.surfaceLight,
+                    borderRadius: '12px',
+                    padding: '16px',
+                    marginBottom: '12px',
+                    cursor: 'pointer',
+                    border: `2px solid ${useAllCategories ? colors.primary : 'transparent'}`,
+                    transition: 'all 0.2s'
+                  }}
+                  onClick={() => {
+                    setUseAllCategories(!useAllCategories);
+                    if (!useAllCategories) {
+                      // Al activar Variados, limpiar selección de categorías
+                      setSelectedCategories([]);
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '6px',
+                      border: `2px solid ${useAllCategories ? colors.text : colors.textMuted}`,
+                      backgroundColor: useAllCategories ? colors.text : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px',
+                      color: useAllCategories ? colors.primary : colors.textMuted
+                    }}>
+                      {useAllCategories && '✓'}
                     </div>
-                  ))}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ 
+                        fontSize: '18px', 
+                        fontWeight: 'bold', 
+                        color: useAllCategories ? colors.text : colors.textMuted,
+                        marginBottom: '4px'
+                      }}>
+                        🎲 Variados
+                      </div>
+                      <div style={{ 
+                        fontSize: '12px', 
+                        color: useAllCategories ? colors.textSecondary : colors.textMuted 
+                      }}>
+                        Personajes aleatorios de todas las categorías
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                {selectedCategory && (
-                  <div style={{ backgroundColor: colors.primary + '15', borderRadius: '12px', padding: '12px', borderLeft: `4px solid ${colors.primary}` }}>
-                    <div style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', marginBottom: '4px' }}>
-                      {selectedCategory.icon} {selectedCategory.name}
+                
+                {!useAllCategories && (
+                  <>
+                  {/* Buscador de categorías */}
+                  {categories.length > 0 && (
+                    <Input
+                      placeholder="🔍 Buscar categoría..."
+                      value={categorySearch}
+                      onChange={setCategorySearch}
+                      style={{ marginBottom: '12px' }}
+                    />
+                  )}
+                  
+                  {loadingCategories ? (
+                    <div style={{ textAlign: 'center', padding: '16px', color: colors.textMuted }}>
+                      Cargando categorías...
                     </div>
-                    <div style={{ color: colors.textSecondary, fontSize: '13px', marginBottom: '4px' }}>{selectedCategory.description}</div>
-                    <div style={{ color: colors.success, fontSize: '12px', fontWeight: '500' }}>
-                      ✅ {selectedCategory.characters.length} personajes disponibles
+                  ) : categories.length === 0 ? (
+                    <div style={{ backgroundColor: colors.surfaceLight, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+                      <p style={{ color: colors.textMuted, marginBottom: '12px' }}>No hay categorías disponibles</p>
+                      <Button title="🔄 Reintentar" onClick={loadCategories} variant="outline" size="small" />
                     </div>
+                  ) : filteredCategories.length === 0 ? (
+                    <div style={{ backgroundColor: colors.surfaceLight, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+                      <p style={{ color: colors.textMuted, marginBottom: '12px' }}>No se encontraron categorías</p>
+                      <Button title="Limpiar búsqueda" onClick={() => setCategorySearch('')} variant="outline" size="small" />
+                    </div>
+                  ) : (
+                <div className="categories-grid">
+                  {filteredCategories.map((cat) => {
+                    const isSelected = selectedCategories.includes(cat.id);
+                    return (
+                      <div
+                        key={cat.id}
+                        onClick={() => toggleCategory(cat.id)}
+                        className={`category-card ${isSelected ? 'selected' : ''}`}
+                        style={{ cursor: 'pointer', position: 'relative' }}
+                      >
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: '8px', 
+                          right: '8px',
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '4px',
+                          border: `2px solid ${isSelected ? colors.primary : colors.textMuted}`,
+                          backgroundColor: isSelected ? colors.primary : 'transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          color: colors.text
+                        }}>
+                          {isSelected && '✓'}
+                        </div>
+                        <div className="category-icon">{cat.icon}</div>
+                        <div className="category-name">{cat.name}</div>
+                        <div className="category-count">{cat.characterCount} pers.</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                  )}
+                </>
+                )}
+                {(useAllCategories || selectedCategories.length > 0) && (
+                  <div style={{ backgroundColor: colors.primary + '15', borderRadius: '12px', padding: '12px', borderLeft: `4px solid ${colors.primary}`, marginTop: '12px' }}>
+                    {!useAllCategories && (
+                      <>
+                    <div style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>
+                      📚 Categorías Seleccionadas ({selectedCategories.length})
+                    </div>
+                    <div style={{ marginBottom: '12px' }}>
+                      {selectedCategories.map(catId => {
+                        const cat = categories.find(c => c.id === catId);
+                        if (!cat) return null;
+                        return (
+                          <div key={catId} style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px',
+                            marginBottom: '6px',
+                            padding: '6px',
+                            backgroundColor: colors.surface,
+                            borderRadius: '8px'
+                          }}>
+                            <span style={{ fontSize: '20px' }}>{cat.icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ color: colors.text, fontSize: '14px', fontWeight: '500' }}>{cat.name}</div>
+                              <div style={{ color: colors.textMuted, fontSize: '12px' }}>{cat.characterCount} personajes</div>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCategories(selectedCategories.filter(id => id !== catId));
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: colors.textMuted,
+                                cursor: 'pointer',
+                                fontSize: '18px',
+                                padding: '4px'
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    </>
+                    )}
+                    {(() => {
+                      let totalChars;
+                      if (useAllCategories) {
+                        totalChars = categories.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                      } else {
+                        const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+                        totalChars = selectedCats.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                      }
+                      return (
+                        <div style={{ color: colors.success, fontSize: '12px', fontWeight: '500', marginBottom: '12px' }}>
+                          ✅ {totalChars} personajes disponibles en total
+                        </div>
+                      );
+                    })()}
                     
                     <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${colors.border}` }}>
                       <Input
                         label="Límite de personajes (opcional)"
                         value={maxCharacters}
                         onChange={setMaxCharacters}
-                        placeholder={`Máximo: ${selectedCategory.characters.length}`}
+                        placeholder={`Máximo: ${(() => {
+                          if (useAllCategories) {
+                            return categories.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                          } else {
+                            const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+                            return selectedCats.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                          }
+                        })()}`}
                       />
                       <p style={{ color: colors.textMuted, fontSize: '11px', marginTop: '4px' }}>
                         {maxCharacters
-                          ? `Se usarán ${Math.min(parseInt(maxCharacters) || 0, selectedCategory.characters.length)} personajes (límite manual)`
+                          ? `Se usarán ${parseInt(maxCharacters) || 0} personajes (límite manual)`
                           : `Se usarán ${parseInt(numPlayers) * parseInt(charactersPerPlayer)} personajes (calculado automáticamente: ${numPlayers} jugadores × ${charactersPerPlayer} por jugador)`
                         }
                       </p>
@@ -1024,7 +1325,7 @@ function LocalGame() {
               onClick={handleConfigSubmit}
               size="large"
               style={{ width: '100%', marginTop: '16px' }}
-              disabled={usePresetCategory && !selectedCategory}
+              disabled={usePresetCategory && !useAllCategories && selectedCategories.length === 0}
             />
           </Card>
         </div>
@@ -1055,11 +1356,14 @@ function LocalGame() {
 
           {category && (
             <div style={{ display: 'flex', alignItems: 'center', backgroundColor: colors.primary, borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
-              {usePresetCategory && selectedCategory && (
-                <span style={{ fontSize: '28px', marginRight: '12px' }}>
-                  {selectedCategory.icon}
-                </span>
-              )}
+              {usePresetCategory && selectedCategories.length > 0 && (() => {
+                const firstCat = categories.find(c => c.id === selectedCategories[0]);
+                return firstCat ? (
+                  <span style={{ fontSize: '28px', marginRight: '12px' }}>
+                    {firstCat.icon}
+                  </span>
+                ) : null;
+              })()}
               <div style={{ flex: 1 }}>
                 <div style={{ color: colors.text, fontSize: '10px', fontWeight: '600', letterSpacing: '1px', opacity: 0.8 }}>CATEGORÍA</div>
                 <div style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold' }}>{category}</div>
@@ -1151,7 +1455,7 @@ function LocalGame() {
                   onChange={(value) => handleCharacterChange(index, value)}
                 />
               ))}
-              <Button title="Agregar Jugador" onClick={handleAddPlayer} />
+              <Button title="Agregar Jugador" onClick={handleAddPlayer} style={{ width: '100%' }} />
             </Card>
           ) : (
             <Card style={{ marginBottom: '16px', textAlign: 'center', padding: '24px' }}>
@@ -1669,10 +1973,27 @@ function LocalGame() {
                   </div>
                 </div>
               </div>
-              <div className="card-face card-front">
+              <div className="card-face card-front" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 <div className="character-name">
                   {displayCharacter?.toUpperCase() || 'SIN TARJETAS'}
                 </div>
+                {displayCharacter && usePresetCategory && (() => {
+                  const charCategory = getCharacterCategory(displayCharacter);
+                  return charCategory ? (
+                    <div style={{ 
+                      fontSize: '20px', 
+                      color: '#ffffff', 
+                      marginTop: '12px',
+                      fontWeight: '500',
+                      textTransform: 'none',
+                      textAlign: 'center',
+                      textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)',
+                      fontFamily: "'Truculenta', sans-serif"
+                    }}>
+                      ({charCategory.name})
+                    </div>
+                  ) : null;
+                })()}
               </div>
             </div>
 
@@ -1925,7 +2246,8 @@ function LocalGame() {
               <button
                 onClick={() => {
                   setUsePresetCategory(false);
-                  setSelectedCategory(null);
+                  setSelectedCategories([]);
+                  setUseAllCategories(false);
                   setMaxCharacters('');
                 }}
                 style={{
@@ -1974,40 +2296,205 @@ function LocalGame() {
               </>
             ) : (
               <div style={{ marginTop: '8px' }}>
-                <p style={{ color: colors.textSecondary, fontSize: '12px', marginBottom: '8px' }}>Selecciona una categoría:</p>
-                <div className="categories-grid">
-                  {categories.map((cat) => (
-                    <div
-                      key={cat.id}
-                      onClick={() => selectCategory(cat.id)}
-                      className={`category-card ${selectedCategory?.id === cat.id ? 'selected' : ''}`}
-                    >
-                      <div className="category-icon">{cat.icon}</div>
-                      <div className="category-name">{cat.name}</div>
-                      <div className="category-count">{cat.characterCount} personajes</div>
+                <p style={{ color: colors.textSecondary, fontSize: '12px', marginBottom: '8px' }}>Selecciona una o más categorías:</p>
+                
+                {/* Opción Variados */}
+                <div
+                  style={{
+                    backgroundColor: useAllCategories ? colors.primary : colors.surfaceLight,
+                    borderRadius: '12px',
+                    padding: '16px',
+                    marginBottom: '12px',
+                    cursor: 'pointer',
+                    border: `2px solid ${useAllCategories ? colors.primary : 'transparent'}`,
+                    transition: 'all 0.2s'
+                  }}
+                  onClick={() => {
+                    setUseAllCategories(!useAllCategories);
+                    if (!useAllCategories) {
+                      // Al activar Variados, limpiar selección de categorías
+                      setSelectedCategories([]);
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '6px',
+                      border: `2px solid ${useAllCategories ? colors.text : colors.textMuted}`,
+                      backgroundColor: useAllCategories ? colors.text : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px',
+                      color: useAllCategories ? colors.primary : colors.textMuted
+                    }}>
+                      {useAllCategories && '✓'}
                     </div>
-                  ))}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ 
+                        fontSize: '18px', 
+                        fontWeight: 'bold', 
+                        color: useAllCategories ? colors.text : colors.textMuted,
+                        marginBottom: '4px'
+                      }}>
+                        🎲 Variados
+                      </div>
+                      <div style={{ 
+                        fontSize: '12px', 
+                        color: useAllCategories ? colors.textSecondary : colors.textMuted 
+                      }}>
+                        Personajes aleatorios de todas las categorías
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                {selectedCategory && (
-                  <div style={{ backgroundColor: colors.primary + '15', borderRadius: '12px', padding: '12px', borderLeft: `4px solid ${colors.primary}` }}>
-                    <div style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', marginBottom: '4px' }}>
-                      {selectedCategory.icon} {selectedCategory.name}
+                
+                {!useAllCategories && (
+                  <>
+                  {/* Buscador de categorías */}
+                  {categories.length > 0 && (
+                    <Input
+                      placeholder="🔍 Buscar categoría..."
+                      value={categorySearch}
+                      onChange={setCategorySearch}
+                      style={{ marginBottom: '12px' }}
+                    />
+                  )}
+                  
+                  {loadingCategories ? (
+                    <div style={{ textAlign: 'center', padding: '16px', color: colors.textMuted }}>
+                      Cargando categorías...
                     </div>
-                    <div style={{ color: colors.textSecondary, fontSize: '13px', marginBottom: '4px' }}>{selectedCategory.description}</div>
-                    <div style={{ color: colors.success, fontSize: '12px', fontWeight: '500' }}>
-                      ✅ {selectedCategory.characters.length} personajes disponibles
+                  ) : categories.length === 0 ? (
+                    <div style={{ backgroundColor: colors.surfaceLight, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+                      <p style={{ color: colors.textMuted, marginBottom: '12px' }}>No hay categorías disponibles</p>
+                      <Button title="🔄 Reintentar" onClick={loadCategories} variant="outline" size="small" />
                     </div>
+                  ) : filteredCategories.length === 0 ? (
+                    <div style={{ backgroundColor: colors.surfaceLight, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+                      <p style={{ color: colors.textMuted, marginBottom: '12px' }}>No se encontraron categorías</p>
+                      <Button title="Limpiar búsqueda" onClick={() => setCategorySearch('')} variant="outline" size="small" />
+                    </div>
+                  ) : (
+                <div className="categories-grid">
+                  {filteredCategories.map((cat) => {
+                    const isSelected = selectedCategories.includes(cat.id);
+                    return (
+                      <div
+                        key={cat.id}
+                        onClick={() => toggleCategory(cat.id)}
+                        className={`category-card ${isSelected ? 'selected' : ''}`}
+                        style={{ cursor: 'pointer', position: 'relative' }}
+                      >
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: '8px', 
+                          right: '8px',
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '4px',
+                          border: `2px solid ${isSelected ? colors.primary : colors.textMuted}`,
+                          backgroundColor: isSelected ? colors.primary : 'transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          color: colors.text
+                        }}>
+                          {isSelected && '✓'}
+                        </div>
+                        <div className="category-icon">{cat.icon}</div>
+                        <div className="category-name">{cat.name}</div>
+                        <div className="category-count">{cat.characterCount} pers.</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                  )}
+                </>
+                )}
+                {(useAllCategories || selectedCategories.length > 0) && (
+                  <div style={{ backgroundColor: colors.primary + '15', borderRadius: '12px', padding: '12px', borderLeft: `4px solid ${colors.primary}`, marginTop: '12px' }}>
+                    {!useAllCategories && (
+                      <>
+                    <div style={{ color: colors.text, fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>
+                      📚 Categorías Seleccionadas ({selectedCategories.length})
+                    </div>
+                    <div style={{ marginBottom: '12px' }}>
+                      {selectedCategories.map(catId => {
+                        const cat = categories.find(c => c.id === catId);
+                        if (!cat) return null;
+                        return (
+                          <div key={catId} style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px',
+                            marginBottom: '6px',
+                            padding: '6px',
+                            backgroundColor: colors.surface,
+                            borderRadius: '8px'
+                          }}>
+                            <span style={{ fontSize: '20px' }}>{cat.icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ color: colors.text, fontSize: '14px', fontWeight: '500' }}>{cat.name}</div>
+                              <div style={{ color: colors.textMuted, fontSize: '12px' }}>{cat.characterCount} personajes</div>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCategories(selectedCategories.filter(id => id !== catId));
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: colors.textMuted,
+                                cursor: 'pointer',
+                                fontSize: '18px',
+                                padding: '4px'
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    </>
+                    )}
+                    {(() => {
+                      let totalChars;
+                      if (useAllCategories) {
+                        totalChars = categories.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                      } else {
+                        const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+                        totalChars = selectedCats.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                      }
+                      return (
+                        <div style={{ color: colors.success, fontSize: '12px', fontWeight: '500', marginBottom: '12px' }}>
+                          ✅ {totalChars} personajes disponibles en total
+                        </div>
+                      );
+                    })()}
                     
                     <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${colors.border}` }}>
                       <Input
                         label="Límite de personajes (opcional)"
                         value={maxCharacters}
                         onChange={setMaxCharacters}
-                        placeholder={`Máximo: ${selectedCategory.characters.length}`}
+                        placeholder={`Máximo: ${(() => {
+                          if (useAllCategories) {
+                            return categories.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                          } else {
+                            const selectedCats = categories.filter(cat => selectedCategories.includes(cat.id));
+                            return selectedCats.reduce((sum, cat) => sum + (cat.characterCount || 0), 0);
+                          }
+                        })()}`}
                       />
                       <p style={{ color: colors.textMuted, fontSize: '11px', marginTop: '4px' }}>
                         {maxCharacters
-                          ? `Se usarán ${Math.min(parseInt(maxCharacters) || 0, selectedCategory.characters.length)} personajes (límite manual)`
+                          ? `Se usarán ${parseInt(maxCharacters) || 0} personajes (límite manual)`
                           : `Se usarán ${players.length * parseInt(charactersPerPlayer)} personajes (calculado automáticamente: ${players.length} jugadores × ${charactersPerPlayer} por jugador)`
                         }
                       </p>
@@ -2022,7 +2509,7 @@ function LocalGame() {
               onClick={handleReconfigSubmit}
               size="large"
               style={{ width: '100%', marginTop: '16px' }}
-              disabled={usePresetCategory && !selectedCategory}
+              disabled={usePresetCategory && !useAllCategories && selectedCategories.length === 0}
             />
           </Card>
         </div>
@@ -2047,11 +2534,14 @@ function LocalGame() {
 
           {category && (
             <div style={{ display: 'flex', alignItems: 'center', backgroundColor: colors.primary, borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
-              {usePresetCategory && selectedCategory && (
-                <span style={{ fontSize: '28px', marginRight: '12px' }}>
-                  {selectedCategory.icon}
-                </span>
-              )}
+              {usePresetCategory && selectedCategories.length > 0 && (() => {
+                const firstCat = categories.find(c => c.id === selectedCategories[0]);
+                return firstCat ? (
+                  <span style={{ fontSize: '28px', marginRight: '12px' }}>
+                    {firstCat.icon}
+                  </span>
+                ) : null;
+              })()}
               <div style={{ flex: 1 }}>
                 <div style={{ color: colors.text, fontSize: '10px', fontWeight: '600', letterSpacing: '1px', opacity: 0.8 }}>CATEGORÍA</div>
                 <div style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold' }}>{category}</div>
