@@ -85,3 +85,14 @@
 .button.large:hover:not(:disabled):not(.loading) {
   font-size: 23px;
 }
+
+/* Limitar altura cuando está cargando para que quepan máximo dos líneas */
+.button.loading {
+  max-height: 70px;
+  min-height: 56px;
+  line-height: 1.2;
+  word-wrap: break-word;
+  white-space: normal;
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
