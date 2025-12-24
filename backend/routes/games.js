@@ -771,8 +771,10 @@ router.post('/:roomCode/hit', auth, async (req, res) => {
     const currentTeamPlayers = players.filter(p => p.team === currentTurn.team);
     const expectedPlayer = currentTeamPlayers[currentTurn.playerIndexInTeam];
     
+    // Rechazar si: no está en el equipo correcto, no hay expectedPlayer, o el expectedPlayer no es el usuario actual
     if (player.team !== currentTurn.team || 
-        (expectedPlayer && expectedPlayer.user !== req.user.id)) {
+        !expectedPlayer || 
+        expectedPlayer.user !== req.user.id) {
       return res.status(400).json({ message: 'No es tu turno' });
     }
 
@@ -926,8 +928,10 @@ router.post('/:roomCode/fail', auth, async (req, res) => {
     const currentTeamPlayers = players.filter(p => p.team === currentTurn.team);
     const expectedPlayer = currentTeamPlayers[currentTurn.playerIndexInTeam];
     
+    // Rechazar si: no está en el equipo correcto, no hay expectedPlayer, o el expectedPlayer no es el usuario actual
     if (player.team !== currentTurn.team || 
-        (expectedPlayer && expectedPlayer.user !== req.user.id)) {
+        !expectedPlayer || 
+        expectedPlayer.user !== req.user.id) {
       return res.status(400).json({ message: 'No es tu turno' });
     }
 

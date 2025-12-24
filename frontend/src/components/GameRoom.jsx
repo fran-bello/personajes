@@ -1409,7 +1409,7 @@ function GameRoom() {
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               {currentPlayerId && isPlayerMVP(currentPlayerId) && <span style={{ fontSize: '16px' }}>👑</span>}
               <span style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold' }}>
-                {isCurrentActivePlayer ? 'Tu turno' : `Equipo ${game.currentTeam}`}
+                {isCurrentActivePlayer ? 'Tu turno' : (currentPlayer ? (typeof currentPlayer.user === 'object' ? currentPlayer.user.username : 'Jugador') : `Equipo ${game.currentTeam}`)}
               </span>
               {currentPlayer && (
                 <span style={{ 
