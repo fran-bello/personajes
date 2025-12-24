@@ -12,6 +12,7 @@ export function Button({
   style = {},
   className = '',
   type = 'button',
+  silent = false, // Prop mantenida por compatibilidad pero no se usa
 }) {
   const buttonClasses = [
     'button',
@@ -22,10 +23,17 @@ export function Button({
     className,
   ].filter(Boolean).join(' ');
 
+  const handleClick = (e) => {
+    // Ejecutar el onClick original si existe
+    if (onClick) {
+      onClick(e);
+    }
+  };
+
   return (
     <button
       type={type}
-      onClick={onClick}
+      onClick={handleClick}
       disabled={disabled || loading}
       className={buttonClasses}
       style={style}

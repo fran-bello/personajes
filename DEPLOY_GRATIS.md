@@ -443,3 +443,6 @@ Tu aplicación está deployada y funcionando. Comparte las URLs con tus usuarios
 - **App Móvil**: Descarga el `.apk` desde Expo
 
 ¡Disfruta tu aplicación en producción! 🚀
+
+
+

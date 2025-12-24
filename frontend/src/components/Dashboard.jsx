@@ -31,7 +31,7 @@ function Dashboard() {
           <img src="/img/logo-personajes.png" alt="Personajes" className="dashboard-logo" />
           <h1 className="dashboard-title">Personajes</h1>
         </div>
-        <Button title="Salir" onClick={handleLogout} variant="secondary" size="small" />
+        <Button title="Salir" onClick={handleLogout} variant="secondary" size="small" silent />
       </div>
 
       {/* Welcome Card */}
@@ -106,6 +106,7 @@ function Dashboard() {
             title="Unirse a Partida"
             onClick={() => navigate('/create-game?mode=join')}
             style={{ width: '100%' }}
+            silent
           />
         </div>
       </Card>

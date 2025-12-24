@@ -8,3 +8,6 @@ ADD COLUMN categoryIds TEXT NULL AFTER categoryId;
 
 -- Nota: Los valores se almacenarán como JSON array, ej: "[1, 2, 3]"
 -- El campo categoryId se mantiene para compatibilidad con partidas existentes
+
+
+

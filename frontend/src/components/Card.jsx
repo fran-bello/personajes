@@ -1,4 +1,5 @@
 import React from 'react';
+import { soundService } from '../services/sound';
 import './Card.css';
 
 export function Card({ children, style = {}, className = '', onClick }) {
@@ -19,9 +20,17 @@ export function Card({ children, style = {}, className = '', onClick }) {
   );
 }
 
-export function ActionCard({ icon, title, description, onClick, badge }) {
+export function ActionCard({ icon, title, description, onClick, badge, silent = true }) {
+  const handleClick = (e) => {
+    // No reproducir sonido por defecto en ActionCard (ya que se usa para navegación)
+    // Ejecutar el onClick original si existe
+    if (onClick) {
+      onClick(e);
+    }
+  };
+
   return (
-    <div className="action-card" onClick={onClick}>
+    <div className="action-card" onClick={handleClick}>
       <span className="action-card-icon">{icon}</span>
       <div className="action-card-content">
         <h3 className="action-card-title">{title}</h3>

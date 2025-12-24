@@ -54,7 +54,8 @@ function HowToPlay() {
           title="Volver" 
           onClick={() => navigate('/dashboard')} 
           variant="secondary" 
-          size="small" 
+          size="small"
+          silent
         />
       </div>
 
@@ -188,6 +189,7 @@ function HowToPlay() {
             title="Volver al Dashboard"
             onClick={() => navigate('/dashboard')}
             style={{ width: '100%', maxWidth: '400px' }}
+            silent
           />
         </div>
       </div>

@@ -163,7 +163,7 @@ function Characters() {
             Mis Personajes
           </h1>
         </div>
-        <Button title="Volver" onClick={() => navigate(-1)} variant="secondary" size="small" />
+        <Button title="Volver" onClick={() => navigate(-1)} variant="secondary" size="small" silent />
       </div>
 
       {/* Error */}

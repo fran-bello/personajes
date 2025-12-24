@@ -105,3 +105,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
 });
+
+
+

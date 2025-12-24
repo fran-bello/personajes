@@ -240,7 +240,7 @@ function CreateGame() {
             Múltiples Dispositivos
           </h1>
         </div>
-        <Button title="Volver" onClick={() => navigate('/dashboard')} variant="secondary" size="small" />
+        <Button title="Volver" onClick={() => navigate('/dashboard')} variant="secondary" size="small" silent />
       </div>
 
       {/* Mode Tabs */}

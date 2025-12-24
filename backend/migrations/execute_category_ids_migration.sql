@@ -24,3 +24,6 @@ EXECUTE alterIfNotExists;
 DEALLOCATE PREPARE alterIfNotExists;
 
 SELECT 'Migración completada. La columna categoryIds ha sido agregada a la tabla games.' AS resultado;
+
+
+

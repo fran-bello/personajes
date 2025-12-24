@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { socketService } from '../services/socket';
+import { soundService } from '../services/sound';
 import { useAuth } from '../context/AuthContext';
 import { Button, Input, Card, Modal, LoadingDots, AvatarSelector } from './index';
 import { AVATARS } from './AvatarSelector';
@@ -29,6 +30,7 @@ function GameRoom() {
   const timeUpHandledRef = useRef(false);
   const [cardAnimation, setCardAnimation] = useState('');
   const [buttonAnimation, setButtonAnimation] = useState({ hit: false, fail: false });
+  const prevCardPressedRef = useRef(false);
 
   const roundRules = {
     1: 'Puedes decir todas las palabras excepto las del personaje',
@@ -62,6 +64,8 @@ function GameRoom() {
       // Primero intentar obtener el juego
       fetchGame();
       connectSocket();
+      // Pre-cargar sonidos
+      soundService.preloadAll();
     }
     return () => {
       socketService.disconnect();
@@ -284,6 +288,8 @@ function GameRoom() {
       
       // Si el juego terminó y antes no estaba terminado, actualizar estadísticas del usuario
       if (response.game.status === 'finished' && previousStatus !== 'finished') {
+        // Sonido de fin de juego
+        soundService.playGameEnd();
         // Refrescar datos del usuario para obtener estadísticas actualizadas
         if (fetchUser) {
           fetchUser();
@@ -309,6 +315,9 @@ function GameRoom() {
     if (!game || game.status !== 'playing' || game.timer?.isPaused || game.waitingForPlayer || game.showingRoundIntro || game.showingRoundIntroMidTurn) {
       return;
     }
+
+    // Sonido de tiempo agotado
+    soundService.playTimeUp();
 
     // Verificar que es el turno del jugador actual
     const currentTeamPlayers = game.players?.filter(p => p.team === game.currentTeam) || [];
@@ -354,6 +363,28 @@ function GameRoom() {
       timeUpHandledRef.current = false;
     }
   }, [timeLeft, game?.status, game?.timer?.isPaused, game?.waitingForPlayer, game?.showingRoundIntro, game?.showingRoundIntroMidTurn, game?.currentTeam, game?.currentPlayerIndex, user?.id]);
+
+  // Efecto para reproducir tick del timer cuando queden exactamente 10 segundos
+  const prevTimeLeftRef = useRef(null);
+  useEffect(() => {
+    if (game && game.status === 'playing' && !game.timer?.isPaused && !game.waitingForPlayer && !game.showingRoundIntro && !game.showingRoundIntroMidTurn) {
+      const currentTimeLeft = getCurrentTimeLeft();
+      // Reproducir solo cuando cambia de 11 a 10 segundos (para evitar múltiples reproducciones)
+      if (currentTimeLeft === 10 && prevTimeLeftRef.current !== 10) {
+        soundService.playTick();
+      }
+      prevTimeLeftRef.current = currentTimeLeft;
+    }
+  }, [timeLeft, game?.status, game?.timer?.isPaused, game?.waitingForPlayer, game?.showingRoundIntro, game?.showingRoundIntroMidTurn]);
+
+  // Efecto para reproducir sonido al voltear la tarjeta
+  useEffect(() => {
+    if (isCardPressed && !prevCardPressedRef.current) {
+      // La tarjeta acaba de ser presionada (cambio de false a true)
+      soundService.playCardFlip();
+    }
+    prevCardPressedRef.current = isCardPressed;
+  }, [isCardPressed]);
 
   const startTimer = () => {
     stopTimer();
@@ -415,6 +446,9 @@ function GameRoom() {
   const handleHit = async () => {
     setIsCardPressed(false);
     
+    // Sonido de acierto
+    soundService.playHit();
+    
     // Animación del botón
     setButtonAnimation(prev => ({ ...prev, hit: true }));
     setTimeout(() => setButtonAnimation(prev => ({ ...prev, hit: false })), 300);
@@ -452,6 +486,9 @@ function GameRoom() {
 
   const handleFail = async () => {
     setIsCardPressed(false);
+    
+    // Sonido de fallo
+    soundService.playFail();
     
     // Animación del botón
     setButtonAnimation(prev => ({ ...prev, fail: true }));
@@ -491,6 +528,7 @@ function GameRoom() {
       if (response.game.timer && response.game.timer.timeLeft !== undefined && response.game.timer.timeLeft !== null) {
         setTimeLeft(response.game.timer.timeLeft);
       }
+      // No reproducir sonido aquí, solo cuando realmente comience la ronda
       socketService.emitGameUpdate(roomCode);
     } catch (err) {
       console.error('[handleRoundIntroSeen] Error:', err);
@@ -508,6 +546,8 @@ function GameRoom() {
       } else {
         setTimeLeft(response.game.timePerRound);
       }
+      // Sonido de inicio de juego
+      soundService.playGameStart();
       socketService.emitGameUpdate(roomCode);
     } catch (err) {
       setError(err.response?.data?.message || 'Error al iniciar');
@@ -518,7 +558,14 @@ function GameRoom() {
     try {
       // Preservar el tiempo actual al pausar/reanudar usando la función helper
       const currentTimeLeft = getCurrentTimeLeft();
-      await api.updateTimer(roomCode, !game?.timer?.isPaused, currentTimeLeft);
+      const willPause = !game?.timer?.isPaused;
+      await api.updateTimer(roomCode, willPause, currentTimeLeft);
+      // Sonido de pausar/reanudar
+      if (willPause) {
+        soundService.playPause();
+      } else {
+        soundService.playResume();
+      }
       socketService.emitGameUpdate(roomCode);
       fetchGame();
     } catch (err) {
@@ -527,17 +574,20 @@ function GameRoom() {
   };
 
   const shareRoomCode = async () => {
+    const gameUrl = `https://personajes.vercel.app/game/${roomCode}`;
+    const shareText = `Únete a mi partida de Personajes con este código\n${gameUrl}`;
+    
     if (navigator.share) {
       try {
         await navigator.share({
           title: 'Únete a mi partida',
-          text: `¡Únete a mi partida de Personajes! Código: ${roomCode}`,
+          text: shareText,
         });
       } catch (err) {}
     } else {
       // Fallback: copiar al portapapeles
-      navigator.clipboard.writeText(roomCode);
-      alert(`Código copiado: ${roomCode}`);
+      navigator.clipboard.writeText(shareText);
+      alert(`Código y link copiados:\nÚnete a mi partida de Personajes con este código\n${gameUrl}`);
     }
   };
 
@@ -598,7 +648,7 @@ function GameRoom() {
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', backgroundColor: 'transparent' }}>
         <Card style={{ width: '100%', maxWidth: '400px', textAlign: 'center' }}>
           <h2 style={{ color: colors.danger, fontSize: '18px', marginBottom: '16px' }}>{error}</h2>
-          <Button title="Volver" onClick={() => navigate('/dashboard')} />
+          <Button title="Volver" onClick={() => navigate('/dashboard')} silent />
         </Card>
       </div>
     );
@@ -615,6 +665,25 @@ function GameRoom() {
   });
   const currentPlayerId = currentPlayer ? (typeof currentPlayer.user === 'object' ? (currentPlayer.user.id || currentPlayer.user._id) : currentPlayer.user) : null;
   const isCurrentTeam = currentPlayer && currentPlayer.team === game.currentTeam;
+  
+  // Determinar si el usuario actual es el jugador activo (no solo del equipo, sino el específico que está de turno)
+  const getCurrentActivePlayer = () => {
+    if (!game || !game.players || game.players.length === 0) return null;
+    
+    // Obtener jugadores del equipo actual
+    const currentTeamPlayers = game.players.filter(p => p.team === game.currentTeam);
+    if (currentTeamPlayers.length === 0) return null;
+    
+    // Obtener el índice del jugador actual usando currentPlayerIndex
+    const playerIndex = game.currentPlayerIndex || 0;
+    const activePlayer = currentTeamPlayers[playerIndex % currentTeamPlayers.length];
+    
+    return activePlayer;
+  };
+  
+  const activePlayer = getCurrentActivePlayer();
+  const activePlayerId = activePlayer ? (typeof activePlayer.user === 'object' ? (activePlayer.user.id || activePlayer.user._id) : activePlayer.user) : null;
+  const isCurrentActivePlayer = currentPlayerId && activePlayerId && currentPlayerId === activePlayerId;
   const team1Score = game.roundScores.round1.team1 + game.roundScores.round2.team1 + game.roundScores.round3.team1;
   const team2Score = game.roundScores.round1.team2 + game.roundScores.round2.team2 + game.roundScores.round3.team2;
   const playerCharactersData = game.playerCharacters || {};
@@ -658,7 +727,7 @@ function GameRoom() {
       ? game.timer.timeLeft 
       : (timeLeft !== undefined && timeLeft !== null ? timeLeft : 60);
     
-    const canConfirm = isCurrentTeam && currentPlayer; // Solo el jugador del equipo actual puede confirmar
+    const canConfirm = isCurrentActivePlayer && currentPlayer; // Solo el jugador activo puede confirmar
     
     // Encontrar el jugador que está jugando actualmente (del equipo actual)
     const currentTeamPlayers = game.players.filter(p => p.team === game.currentTeam);
@@ -877,7 +946,7 @@ function GameRoom() {
   }
 
   // WAITING FOR PLAYER SCREEN (tu turno)
-  if (game.status === 'playing' && game.waitingForPlayer && isCurrentTeam) {
+  if (game.status === 'playing' && game.waitingForPlayer && isCurrentActivePlayer) {
     const myStats = currentPlayerId ? getPlayerStats(currentPlayerId) : { hits: 0, fails: 0 };
     const amMVP = currentPlayerId ? isPlayerMVP(currentPlayerId) : false;
 
@@ -962,7 +1031,7 @@ function GameRoom() {
   }
 
   // WAITING FOR OTHER PLAYER (not your turn)
-  if (game.status === 'playing' && game.waitingForPlayer && !isCurrentTeam) {
+  if (game.status === 'playing' && game.waitingForPlayer && !isCurrentActivePlayer) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
         <Modal
@@ -985,9 +1054,44 @@ function GameRoom() {
 
           <div style={{ width: '100%', height: '1px', backgroundColor: colors.border, margin: '16px 0' }} />
 
-          <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '24px' }}>
+          <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '12px' }}>
             Esperando al Equipo {game.currentTeam}...
           </p>
+          {activePlayer && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '24px' }}>
+              {(() => {
+                const playerId = typeof activePlayer.user === 'object' ? (activePlayer.user.id || activePlayer.user._id) : activePlayer.user;
+                const playerGoogleAvatar = typeof activePlayer.user === 'object' ? activePlayer.user.avatar : null;
+                const playerSelectedAvatar = playerAvatars && playerAvatars[playerId] ? playerAvatars[playerId] : null;
+                const hasSelectedAvatar = playerSelectedAvatar && playerSelectedAvatar !== '👤';
+                
+                return (
+                  <>
+                    {hasSelectedAvatar ? (
+                      <div style={{ fontSize: '32px' }}>{playerSelectedAvatar}</div>
+                    ) : playerGoogleAvatar ? (
+                      <img 
+                        src={playerGoogleAvatar} 
+                        alt="Avatar"
+                        style={{ 
+                          width: '32px', 
+                          height: '32px', 
+                          borderRadius: '50%', 
+                          objectFit: 'cover',
+                          border: '2px solid rgba(255, 255, 255, 0.3)'
+                        }} 
+                      />
+                    ) : (
+                      <div style={{ fontSize: '32px' }}>👤</div>
+                    )}
+                    <span style={{ color: colors.text, fontSize: '18px', fontWeight: '600' }}>
+                      {typeof activePlayer.user === 'object' ? activePlayer.user.username : 'Jugador'}
+                    </span>
+                  </>
+                );
+              })()}
+            </div>
+          )}
           <div style={{ fontSize: '32px', color: colors.primary, marginBottom: '24px' }}>⏳</div>
 
           <div style={{ display: 'flex', gap: '48px', marginTop: '24px', justifyContent: 'center' }}>
@@ -1056,12 +1160,14 @@ function GameRoom() {
                   onClick={() => setShowCancelModal(true)}
                   variant="danger"
                   size="small"
+                  silent
                 />
               ) : (
                 <Button
                   title="Salirse"
                   onClick={handleLeaveGame}
                   size="small"
+                  silent
                 />
               )}
             </div>
@@ -1300,11 +1406,23 @@ function GameRoom() {
           />
           {/* Header con info del jugador */}
           <div style={{ display: 'flex', alignItems: 'center', backgroundColor: colors.surface, borderRadius: '16px', padding: '12px', marginBottom: '8px' }}>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               {currentPlayerId && isPlayerMVP(currentPlayerId) && <span style={{ fontSize: '16px' }}>👑</span>}
               <span style={{ color: colors.text, fontSize: '18px', fontWeight: 'bold' }}>
-                {isCurrentTeam ? 'Tu turno' : `Equipo ${game.currentTeam}`}
+                {isCurrentActivePlayer ? 'Tu turno' : `Equipo ${game.currentTeam}`}
               </span>
+              {currentPlayer && (
+                <span style={{ 
+                  color: colors.textMuted, 
+                  fontSize: '12px',
+                  backgroundColor: currentPlayer.team === 1 ? `${colors.primary}20` : `${colors.secondary}20`,
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontWeight: '600'
+                }}>
+                  Equipo {currentPlayer.team}
+                </span>
+              )}
               {currentPlayerId && (
                 <span style={{ color: colors.textMuted, fontSize: '12px' }}>
                   ✓{getPlayerStats(currentPlayerId).hits} ✗{getPlayerStats(currentPlayerId).fails}
@@ -1355,7 +1473,7 @@ function GameRoom() {
           </div>
 
           {/* Tarjeta del personaje */}
-          {isCurrentTeam ? (
+          {isCurrentActivePlayer ? (
             <div
               className={`character-game-card ${cardAnimation}`}
               onMouseDown={() => setIsCardPressed(true)}
@@ -1415,7 +1533,7 @@ function GameRoom() {
             {availableCharacters.length} personajes restantes
           </p>
 
-          {isCurrentTeam ? (
+          {isCurrentActivePlayer ? (
             <div style={{ display: 'flex', gap: '16px', marginBottom: '12px' }}>
               <button
                 onClick={handleFail}
@@ -1437,13 +1555,48 @@ function GameRoom() {
               <p style={{ color: colors.textMuted, fontSize: '18px', fontWeight: '600', margin: '0 0 4px 0' }}>
                 Espera tu turno...
               </p>
-              <p style={{ color: colors.textMuted, fontSize: '14px', margin: 0 }}>
+              <p style={{ color: colors.textMuted, fontSize: '14px', margin: '0 0 8px 0' }}>
                 El equipo {game.currentTeam} está jugando
               </p>
+              {activePlayer && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '8px' }}>
+                  {(() => {
+                    const playerId = typeof activePlayer.user === 'object' ? (activePlayer.user.id || activePlayer.user._id) : activePlayer.user;
+                    const playerGoogleAvatar = typeof activePlayer.user === 'object' ? activePlayer.user.avatar : null;
+                    const playerSelectedAvatar = playerAvatars && playerAvatars[playerId] ? playerAvatars[playerId] : null;
+                    const hasSelectedAvatar = playerSelectedAvatar && playerSelectedAvatar !== '👤';
+                    
+                    return (
+                      <>
+                        {hasSelectedAvatar ? (
+                          <div style={{ fontSize: '24px' }}>{playerSelectedAvatar}</div>
+                        ) : playerGoogleAvatar ? (
+                          <img 
+                            src={playerGoogleAvatar} 
+                            alt="Avatar"
+                            style={{ 
+                              width: '24px', 
+                              height: '24px', 
+                              borderRadius: '50%', 
+                              objectFit: 'cover',
+                              border: '2px solid rgba(255, 255, 255, 0.3)'
+                            }} 
+                          />
+                        ) : (
+                          <div style={{ fontSize: '24px' }}>👤</div>
+                        )}
+                        <span style={{ color: colors.text, fontSize: '16px', fontWeight: '600' }}>
+                          {typeof activePlayer.user === 'object' ? activePlayer.user.username : 'Jugador'}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </Card>
           )}
 
-          {isCurrentTeam && (
+          {isCurrentActivePlayer && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <button
                 onClick={togglePause}
@@ -1477,7 +1630,7 @@ function GameRoom() {
               </button>
             </div>
           )}
-          {!isCurrentTeam && (
+          {!isCurrentActivePlayer && (
             <button
               onClick={() => setShowExitModal(true)}
               style={{
@@ -1590,7 +1743,8 @@ function GameRoom() {
               title="Volver al Dashboard" 
               onClick={() => navigate('/dashboard')} 
               size="large" 
-              style={{ width: '100%' }} 
+              style={{ width: '100%' }}
+              silent
             />
           </div>
         </div>

@@ -56,12 +56,14 @@ function Modal({ isOpen, onClose, title, message, onConfirm, confirmText = 'Conf
             onClick={onClose}
             variant="secondary"
             size="medium"
+            silent
           />
           <Button
             title={confirmText}
             onClick={onConfirm}
             variant={variant}
             size="medium"
+            silent
           />
         </div>
       </div>

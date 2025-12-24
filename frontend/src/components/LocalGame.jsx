@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Input, Card, Modal } from './index';
 import { colors } from '../theme';
 import { api } from '../services/api';
+import { soundService } from '../services/sound';
 import { OFFLINE_CATEGORIES, getCategoryById, LOCAL_AVATARS } from '../data/categories';
 import './LocalGame.css';
 
@@ -92,6 +93,11 @@ function LocalGame() {
       loadCategories();
     }
   }, [usePresetCategory]);
+
+  // Pre-cargar sonidos cuando el componente se monta
+  useEffect(() => {
+    soundService.preloadAll();
+  }, []);
 
   const loadCategories = async () => {
     setLoadingCategories(true);
@@ -185,6 +191,28 @@ function LocalGame() {
       return () => clearInterval(timer);
     }
   }, [gameState, isPaused, timeLeft]);
+
+  // Efecto para reproducir tick del timer cuando queden exactamente 10 segundos
+  const prevTimeLeftRef = useRef(null);
+  useEffect(() => {
+    if (gameState === 'playing' && !isPaused) {
+      // Reproducir solo cuando cambia de 11 a 10 segundos (para evitar múltiples reproducciones)
+      if (timeLeft === 10 && prevTimeLeftRef.current !== 10) {
+        soundService.playTick();
+      }
+      prevTimeLeftRef.current = timeLeft;
+    }
+  }, [timeLeft, gameState, isPaused]);
+
+  // Efecto para reproducir sonido al voltear la tarjeta
+  const prevCardPressedRef = useRef(false);
+  useEffect(() => {
+    if (isCardPressed && !prevCardPressedRef.current) {
+      // La tarjeta acaba de ser presionada (cambio de false a true)
+      soundService.playCardFlip();
+    }
+    prevCardPressedRef.current = isCardPressed;
+  }, [isCardPressed]);
 
   useEffect(() => {
     setPlayerCharacters(Array(parseInt(charactersPerPlayer) || 2).fill(''));
@@ -426,6 +454,8 @@ function LocalGame() {
     setTimeLeft(parseInt(timePerRound) || 60);
     // Inicializar scores dinámicamente según número de equipos
     setScores(initializeScores());
+    // Sonido de inicio de juego
+    soundService.playGameStart();
   };
 
   // Helper para calcular el siguiente turno alternando entre equipos y jugadores
@@ -577,9 +607,13 @@ function LocalGame() {
         setBlockedCharacters([]);
         setCurrentCharacter(pickRandomCharacter(newChars, []));
         setGameState('round_intro_mid_turn');
+        // Sonido de cambio de ronda
+        soundService.playRoundStart();
         // No cambiar turno en cambio de ronda mid-turn, mantener el mismo jugador
       } else {
         setGameState('finished');
+        // Sonido de fin de juego
+        soundService.playGameEnd();
       }
     } else {
       // Hay personajes restantes: solo cambiar el personaje, mantener el mismo turno
@@ -593,6 +627,9 @@ function LocalGame() {
 
   const handleTimeUp = () => {
     const timePerRoundInt = parseInt(timePerRound) || 60;
+    
+    // Sonido de tiempo agotado
+    soundService.playTimeUp();
     
     setIsPaused(true);
     
@@ -616,6 +653,9 @@ function LocalGame() {
     setIsCardPressed(false);
     const currentPlayer = getCurrentPlayer();
     if (!currentPlayer) return;
+    
+    // Sonido de acierto
+    soundService.playHit();
     
     // Animación del botón
     setButtonAnimation(prev => ({ ...prev, hit: true }));
@@ -665,9 +705,14 @@ function LocalGame() {
     setIsCardPressed(false);
     setIsPaused(false);
     setGameState('playing');
+    // Sonido de inicio de ronda (cuando se confirma estar listo)
+    soundService.playRoundStart();
   };
 
   const handleFail = () => {
+    // Sonido de fallo
+    soundService.playFail();
+    
     // Animación del botón
     setButtonAnimation(prev => ({ ...prev, fail: true }));
     setTimeout(() => setButtonAnimation(prev => ({ ...prev, fail: false })), 300);
@@ -973,7 +1018,7 @@ function LocalGame() {
               <span style={{ fontSize: '28px' }}>🎮</span>
               <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: colors.text, margin: 0, textTransform: 'uppercase' }}>Un Solo Dispositivo</h1>
             </div>
-            <Button title="Volver" onClick={() => navigate('/dashboard')} variant="secondary" size="small" />
+            <Button title="Volver" onClick={() => navigate('/dashboard')} variant="secondary" size="small" silent />
           </div>
 
           <Card>
@@ -1756,6 +1801,8 @@ function LocalGame() {
               setIsCardPressed(false);
               setIsPaused(false);
               setGameState('playing');
+              // Sonido de inicio de ronda
+              soundService.playRoundStart();
             }}
             size="large"
             style={{ margin: '0 20px 6px 20px' }}
@@ -2047,7 +2094,16 @@ function LocalGame() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <button
-              onClick={() => setIsPaused(!isPaused)}
+              onClick={() => {
+                const newPausedState = !isPaused;
+                setIsPaused(newPausedState);
+                // Sonido de pausar/reanudar
+                if (newPausedState) {
+                  soundService.playPause();
+                } else {
+                  soundService.playResume();
+                }
+              }}
               style={{
                 width: '100%',
                 textAlign: 'center',
@@ -2192,7 +2248,7 @@ function LocalGame() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <Button title="🔄 Jugar Otra Vez (mismos jugadores)" onClick={playAgain} size="large" />
             <Button title="Nueva Partida" onClick={resetGame} variant="outline" size="large" />
-            <Button title="Volver al Menú" onClick={() => navigate('/dashboard')} variant="secondary" size="large" />
+            <Button title="Volver al Menú" onClick={() => navigate('/dashboard')} variant="secondary" size="large" silent />
           </div>
         </div>
       </div>
