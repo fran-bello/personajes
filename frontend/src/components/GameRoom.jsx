@@ -712,6 +712,21 @@ function GameRoom() {
   const charsPerPlayer = game.charactersPerPlayer || 2;
   const totalCharactersNeeded = usesCategory ? 0 : (game.numPlayers || 4) * charsPerPlayer;
   const myCharacters = currentPlayerId ? playerCharactersData[currentPlayerId] || [] : [];
+  
+  // Obtener el estado de qué jugadores están listos (viene del backend)
+  const playersReadyStatus = game.playersReadyStatus || {};
+  
+  // Verificar qué jugadores están listos (tienen personajes ingresados o usan categorías)
+  const getPlayerReadyStatus = (playerId) => {
+    // Usar la información del backend si está disponible
+    return playersReadyStatus[playerId] === true;
+  };
+  
+  // Verificar si todos los jugadores están listos
+  const allPlayersReady = game.players.every((player) => {
+    const playerId = typeof player.user === 'object' ? (player.user.id || player.user._id) : player.user;
+    return getPlayerReadyStatus(playerId);
+  }) && game.players.length >= 2;
   // Obtener información de categoría(es)
   const categoryInfo = game.category; // Legacy: una sola categoría
   const categoriesInfo = game.categories; // Array de categorías (múltiples)
@@ -1240,6 +1255,7 @@ function GameRoom() {
                 // Priorizar avatar seleccionado en la partida, si no hay, usar avatar de Google, si no hay ninguno, usar emoji por defecto
                 const hasSelectedAvatar = playerSelectedAvatar && playerSelectedAvatar !== '👤';
                 const isMe = playerId === user?.id;
+                const isReady = getPlayerReadyStatus(playerId);
                 return (
                   <div
                     key={index}
@@ -1269,18 +1285,23 @@ function GameRoom() {
                     ) : (
                       <div style={{ fontSize: '48px', marginBottom: '8px' }}>👤</div>
                     )}
-                    <p style={{ 
-                      color: colors.text, 
-                      fontSize: '14px', 
-                      fontWeight: 'bold', 
-                      margin: 0,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      wordBreak: 'break-word'
-                    }}>
-                      {playerName}
-                      {isMe && ' (Tú)'}
-                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <p style={{ 
+                        color: colors.text, 
+                        fontSize: '14px', 
+                        fontWeight: 'bold', 
+                        margin: 0,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        wordBreak: 'break-word'
+                      }}>
+                        {playerName}
+                        {isMe && ' (Tú)'}
+                      </p>
+                      {isReady && (
+                        <span style={{ fontSize: '18px', color: colors.success }} title="Listo">✓</span>
+                      )}
+                    </div>
                     {isHost && playerId === (typeof game.host === 'object' ? (game.host.id || game.host._id) : game.host) && (
                       <span style={{ 
                         fontSize: '10px', 
@@ -1359,14 +1380,20 @@ function GameRoom() {
                   Personajes: {game.characters?.length || 0} / {totalCharactersNeeded}
                 </p>
               )}
-              {isHost && (usesCategory || game.characters?.length >= totalCharactersNeeded) && game.players.length >= 2 && (
+              {isHost && game.players.length >= 2 && (
                 <div style={{ marginTop: '24px' }}>
                   <Button 
-                    title="Iniciar Partida" 
+                    title={allPlayersReady ? "Iniciar Partida" : "Esperando que todos los jugadores estén listos..."}
                     onClick={handleStart} 
                     size="large" 
                     style={{ width: '100%' }}
+                    disabled={!allPlayersReady}
                   />
+                  {!allPlayersReady && !usesCategory && (
+                    <p style={{ color: colors.textMuted, fontSize: '12px', marginTop: '8px', textAlign: 'center' }}>
+                      Faltan jugadores por ingresar sus personajes
+                    </p>
+                  )}
                 </div>
               )}
               {!isHost && (

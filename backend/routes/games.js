@@ -175,6 +175,26 @@ const formatGame = async (game, req = null) => {
   if (req && req.user) {
     filteredPlayerCharacters[req.user.id] = playerCharacters[req.user.id] || [];
   }
+  
+  // Crear objeto que indique qué jugadores tienen personajes ingresados (sin mostrar los personajes)
+  const playersReadyStatus = {};
+  const charsPerPlayer = game.charactersPerPlayer || 2;
+  const usesCategory = (game.categoryId != null || (game.categoryIds && game.categoryIds.length > 0)) || game.charactersPerPlayer === 0;
+  
+  // Si usa categorías, todos están listos automáticamente
+  if (usesCategory) {
+    players.forEach(player => {
+      const playerId = player.user;
+      playersReadyStatus[playerId] = true;
+    });
+  } else {
+    // En modo personalizado, verificar si cada jugador tiene personajes ingresados
+    players.forEach(player => {
+      const playerId = player.user;
+      const playerChars = playerCharacters[playerId] || [];
+      playersReadyStatus[playerId] = Array.isArray(playerChars) && playerChars.length >= charsPerPlayer;
+    });
+  }
 
   // Obtener información de las categorías si existen
   let categoryInfo = null;
@@ -234,8 +254,6 @@ const formatGame = async (game, req = null) => {
       categoriesInfo = [categoryInfo];
     }
   }
-
-  const usesCategory = (game.categoryId != null || (game.categoryIds && game.categoryIds.length > 0)) || game.charactersPerPlayer === 0;
 
   // Crear mapeo de personajes a categorías para mostrar en la UI
   let characterCategories = {};
@@ -304,6 +322,7 @@ const formatGame = async (game, req = null) => {
     host: host ? { _id: host.id, username: host.username, avatar: hostAvatar } : null,
     players: playersWithUsers,
     playerCharacters: filteredPlayerCharacters, // Solo los personajes del usuario actual
+    playersReadyStatus: playersReadyStatus, // Estado de qué jugadores tienen personajes ingresados
     playerAvatars: playerAvatarsData, // Avatares de todos los jugadores
     playerStats: gameData.playerStats || {},
     roundCharacters: gameData.roundCharacters || [],
