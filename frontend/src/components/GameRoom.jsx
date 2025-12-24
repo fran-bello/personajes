@@ -309,6 +309,42 @@ function GameRoom() {
     }
   };
 
+  // Helper para obtener el jugador activo actual (misma lógica que el backend)
+  const getCurrentActivePlayer = () => {
+    if (!game || !game.players || game.players.length === 0) return null;
+    
+    // Organizar jugadores por equipo (igual que en el backend)
+    const playersByTeam = {};
+    game.players.forEach((player, index) => {
+      const team = player.team;
+      if (!playersByTeam[team]) {
+        playersByTeam[team] = [];
+      }
+      playersByTeam[team].push({ ...player, originalIndex: index });
+    });
+    
+    // Obtener todos los equipos y ordenarlos
+    const teams = Object.keys(playersByTeam).map(Number).sort((a, b) => a - b);
+    const totalTeams = teams.length;
+    
+    const currentPlayerIndex = game.currentPlayerIndex || 0;
+    
+    // Calcular qué posición de jugador dentro del equipo (0, 1, 2, ...)
+    const playerPosition = Math.floor(currentPlayerIndex / totalTeams);
+    
+    // Calcular qué equipo debe jugar (alternando)
+    const teamIndex = currentPlayerIndex % totalTeams;
+    const currentTeamNum = teams[teamIndex];
+    
+    // Obtener el jugador específico de ese equipo en esa posición
+    const teamPlayers = playersByTeam[currentTeamNum] || [];
+    const playerIndexInTeam = playerPosition % teamPlayers.length;
+    
+    const activePlayer = teamPlayers.length > 0 ? teamPlayers[playerIndexInTeam] : null;
+    
+    return activePlayer;
+  };
+
   const handleTimeUp = async () => {
     // Cuando el tiempo se acaba, terminar el turno automáticamente (equivalente a un fallo)
     // Solo procesar si el juego está corriendo y es el turno del jugador actual
@@ -319,10 +355,8 @@ function GameRoom() {
     // Sonido de tiempo agotado
     soundService.playTimeUp();
 
-    // Verificar que es el turno del jugador actual
-    const currentTeamPlayers = game.players?.filter(p => p.team === game.currentTeam) || [];
-    const currentPlayerIndex = game.currentPlayerIndex || 0;
-    const activePlayer = currentTeamPlayers.length > 0 ? currentTeamPlayers[currentPlayerIndex % currentTeamPlayers.length] : null;
+    // Verificar que es el turno del jugador actual usando getCurrentActivePlayer
+    const activePlayer = getCurrentActivePlayer();
     if (!activePlayer) return;
 
     const activePlayerId = typeof activePlayer.user === 'object' ? (activePlayer.user.id || activePlayer.user._id) : activePlayer.user;
@@ -345,10 +379,8 @@ function GameRoom() {
   // Efecto para detectar cuando el tiempo llega a 0 y terminar el turno automáticamente
   useEffect(() => {
     if (timeLeft === 0 && game && game.status === 'playing' && !game.timer?.isPaused && !game.waitingForPlayer && !game.showingRoundIntro && !game.showingRoundIntroMidTurn && !timeUpHandledRef.current) {
-      // Verificar que es el turno del jugador actual antes de terminar
-      const currentTeamPlayers = game.players?.filter(p => p.team === game.currentTeam) || [];
-      const currentPlayerIndex = game.currentPlayerIndex || 0;
-      const activePlayer = currentTeamPlayers.length > 0 ? currentTeamPlayers[currentPlayerIndex % currentTeamPlayers.length] : null;
+      // Verificar que es el turno del jugador actual antes de terminar usando getCurrentActivePlayer
+      const activePlayer = getCurrentActivePlayer();
       
       if (activePlayer) {
         const activePlayerId = typeof activePlayer.user === 'object' ? (activePlayer.user.id || activePlayer.user._id) : activePlayer.user;
@@ -362,7 +394,7 @@ function GameRoom() {
       // Resetear el flag cuando el tiempo no es 0
       timeUpHandledRef.current = false;
     }
-  }, [timeLeft, game?.status, game?.timer?.isPaused, game?.waitingForPlayer, game?.showingRoundIntro, game?.showingRoundIntroMidTurn, game?.currentTeam, game?.currentPlayerIndex, user?.id]);
+  }, [timeLeft, game?.status, game?.timer?.isPaused, game?.waitingForPlayer, game?.showingRoundIntro, game?.showingRoundIntroMidTurn, game?.currentTeam, game?.currentPlayerIndex, game?.players, user?.id]);
 
   // Efecto para reproducir tick del timer cuando queden exactamente 10 segundos
   const prevTimeLeftRef = useRef(null);
@@ -665,21 +697,6 @@ function GameRoom() {
   });
   const currentPlayerId = currentPlayer ? (typeof currentPlayer.user === 'object' ? (currentPlayer.user.id || currentPlayer.user._id) : currentPlayer.user) : null;
   const isCurrentTeam = currentPlayer && currentPlayer.team === game.currentTeam;
-  
-  // Determinar si el usuario actual es el jugador activo (no solo del equipo, sino el específico que está de turno)
-  const getCurrentActivePlayer = () => {
-    if (!game || !game.players || game.players.length === 0) return null;
-    
-    // Obtener jugadores del equipo actual
-    const currentTeamPlayers = game.players.filter(p => p.team === game.currentTeam);
-    if (currentTeamPlayers.length === 0) return null;
-    
-    // Obtener el índice del jugador actual usando currentPlayerIndex
-    const playerIndex = game.currentPlayerIndex || 0;
-    const activePlayer = currentTeamPlayers[playerIndex % currentTeamPlayers.length];
-    
-    return activePlayer;
-  };
   
   const activePlayer = getCurrentActivePlayer();
   const activePlayerId = activePlayer ? (typeof activePlayer.user === 'object' ? (activePlayer.user.id || activePlayer.user._id) : activePlayer.user) : null;
