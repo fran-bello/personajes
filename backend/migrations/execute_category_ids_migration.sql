@@ -28,3 +28,4 @@ SELECT 'Migración completada. La columna categoryIds ha sido agregada a la tabl
 
 
 
+

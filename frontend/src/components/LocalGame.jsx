@@ -2007,7 +2007,7 @@ function LocalGame() {
               onMouseLeave={() => setIsCardPressed(false)}
               onTouchStart={() => setIsCardPressed(true)}
               onTouchEnd={() => setIsCardPressed(false)}
-              data-flipped={isCardPressed}
+              data-flipped="true"
             >
               <div className="card-face card-back">
                 <div className="card-back-content">
